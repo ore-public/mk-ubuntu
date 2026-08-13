@@ -1,0 +1,54 @@
+#
+# zimfw の設定ファイル。シェル起動時には読まれず、zimfw が読むだけ。
+# 変更したら次のシェル起動時に自動で init.zsh が作り直される。
+#
+
+#
+# モジュール
+#
+
+# Zsh の組み込みオプションを妥当な既定値にする
+zmodule environment
+# git のエイリアスと関数
+zmodule git
+# 入力イベントに対する bindkey を正しく設定する
+zmodule input
+# ターミナルのタイトルを設定する
+zmodule termtitle
+# ls / grep / less に色を付けるなどのユーティリティ
+zmodule utility
+# fzf のシェル統合。Ctrl+R で履歴のあいまい検索、Ctrl+T でファイル一覧とプレビュー。
+# プレビューには bat (Ubuntu では batcat への系統リンク) を、
+# ファイル列挙には ripgrep を使う。どちらも 10-packages.sh が導入する。
+zmodule fzf
+
+#
+# プロンプト
+#
+
+# 直前のコマンドの実行時間をプロンプトに公開する
+zmodule duration-info
+# git のリポジトリ状態をプロンプトに公開する
+zmodule git-info
+# ASCII のみの軽量プロンプト
+zmodule asciiship
+
+#
+# 補完
+#
+
+# 追加の補完定義
+zmodule zsh-users/zsh-completions --fpath src
+# 補完の有効化。補完定義を追加するモジュールより後に読む必要がある。
+zmodule completion
+
+#
+# 最後に読む必要があるモジュール
+#
+
+# fish 風のシンタックスハイライト。completion より後。
+zmodule zsh-users/zsh-syntax-highlighting
+# fish 風の履歴検索。zsh-syntax-highlighting より後。
+zmodule zsh-users/zsh-history-substring-search
+# fish 風の入力補完 (グレー表示のサジェスト)
+zmodule zsh-users/zsh-autosuggestions
