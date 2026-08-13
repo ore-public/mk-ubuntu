@@ -1,0 +1,40 @@
+# xremap の設定。/etc/skel から新規ユーザーへ配布される。
+# 設定の書き方: https://github.com/xremap/xremap
+#
+# ターミナル (Ghostty / Ptyxis) はグローバルなリマップから除外している。
+# ターミナル内の Mac 風コピペは Ghostty のネイティブ keybind
+# (~/.config/ghostty/config の alt+c / alt+v) が担当する。
+#
+# application の値は Wayland では GNOME 拡張が返す WM_CLASS。
+# 実際の値は Alt+F2 → lg → Windows タブで確認できる。
+
+modmap:
+  - name: CapsLock to Ctrl
+    remap:
+      CapsLock: Ctrl_L
+
+keymap:
+  - name: Global Mac Bindings (Except Terminals)
+    application:
+      not: [com.mitchellh.ghostty, org.gnome.Ptyxis]
+    remap:
+      # Mac の Command 相当を Alt に割り当てる
+      Alt-c: Ctrl-c
+      Alt-v: Ctrl-v
+      Alt-x: Ctrl-x
+      Alt-z: Ctrl-z
+      Alt-a: Ctrl-a
+      Alt-s: Ctrl-s
+      Alt-f: Ctrl-f
+      Alt-t: Ctrl-t
+      Alt-w: Ctrl-w
+      # Emacs 風のカーソル移動
+      Ctrl-p: Up
+      Ctrl-n: Down
+      Ctrl-b: Left
+      Ctrl-f: Right
+      Ctrl-a: Home
+      Ctrl-e: End
+      Ctrl-h: BackSpace
+      Ctrl-d: Delete
+      Ctrl-k: [Shift-End, BackSpace]
