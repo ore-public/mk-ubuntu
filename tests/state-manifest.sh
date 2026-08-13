@@ -33,8 +33,6 @@ hash_tree() {
     while IFS= read -r -d '' f; do
       printf 'tree    %s %s\n' "$f" "$(sha256sum "$f" | cut -d' ' -f1)"
     done
-  # git のワーキングツリー内部など、内容が揺れるものは除外しない代わりに
-  # 呼び出し側で対象ディレクトリを絞る。
 }
 
 echo "=== 管理下のファイル ==="
