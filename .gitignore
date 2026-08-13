@@ -1,0 +1,9 @@
+# ハーネスの実環境設定 (VM の実パスやパスワードを含むため)
+harness/config.env
+
+# ハーネスの実行時生成物
+harness/logs/
+harness/shots/
+harness/.state/
+
+.DS_Store
