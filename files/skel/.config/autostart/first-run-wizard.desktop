@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=AI エージェント初回セットアップ
+Comment=Claude Code / Copilot CLI / opencode の認証と、Playwright MCP・herdr 連携の初期設定
+Exec=ghostty -e /usr/local/bin/first-run-wizard
+Icon=utilities-terminal
+Terminal=false
+X-GNOME-Autostart-enabled=true
+X-GNOME-Autostart-Delay=8
+NoDisplay=false

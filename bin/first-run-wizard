@@ -1,0 +1,345 @@
+#!/usr/bin/env bash
+#
+# 初回ログイン時に自動起動する、AI エージェントの認証ウィザード。
+#
+#   first-run-wizard              対話的に実行する
+#   first-run-wizard --force      完了フラグがあっても実行する
+#   first-run-wizard --headless   対話なしで、認証不要なステップだけ実行する (検証用)
+#   first-run-wizard --status     各ステップの現状を表示して終了する
+#
+# 認証情報はこのスクリプトでは一切保存も送信もしない。
+# 各エージェント自身のログインコマンドを起動するだけ。
+#
+set -euo pipefail
+
+DISTRO_NAME="mk-ubuntu"
+STATE_DIR="${XDG_CONFIG_HOME:-${HOME}/.config}/${DISTRO_NAME}"
+DONE_FLAG="${STATE_DIR}/wizard-done"
+
+PLAYWRIGHT_MCP_VERSION="0.0.79"
+HERDR_REVIEWR_REPO="persiyanov/herdr-reviewr"
+HERDR_REVIEWR_REF="v0.30.4"
+
+HEADLESS=0
+FORCE=0
+FAILED_STEPS=()
+
+# ---------------------------------------------------------------------------
+# 表示
+# ---------------------------------------------------------------------------
+
+if [ -t 1 ]; then
+  C_BOLD=$'\033[1m'; C_DIM=$'\033[2m'; C_OK=$'\033[32m'; C_NG=$'\033[31m'; C_RESET=$'\033[0m'
+else
+  C_BOLD=""; C_DIM=""; C_OK=""; C_NG=""; C_RESET=""
+fi
+
+say() { printf '%s\n' "$*"; }
+info() { printf '%s%s%s\n' "$C_DIM" "$*" "$C_RESET"; }
+ok() { printf '%s✓ %s%s\n' "$C_OK" "$*" "$C_RESET"; }
+ng() { printf '%s✗ %s%s\n' "$C_NG" "$*" "$C_RESET"; }
+
+banner() {
+  printf '\n%s%s%s\n' "$C_BOLD" "==== $* ====" "$C_RESET"
+}
+
+usage() {
+  cat <<'EOF'
+使い方: first-run-wizard [オプション]
+
+  --force      完了フラグがあっても最初から実行する
+  --headless   対話なしで、認証を伴わないステップだけ実行する (検証用)
+  --status     各ステップの現状を表示して終了する
+  -h, --help   このヘルプを表示する
+EOF
+}
+
+# ---------------------------------------------------------------------------
+# ステップの実行制御
+# ---------------------------------------------------------------------------
+
+# ask_step <説明>
+# 実行するなら 0、スキップするなら 1 を返す。q で中断。
+ask_step() {
+  local prompt="$1" answer
+  if [ "$HEADLESS" -eq 1 ]; then
+    return 0
+  fi
+  while true; do
+    printf '%s [Enter=実行 / s=スキップ / q=中断] ' "$prompt"
+    read -r answer </dev/tty || answer="s"
+    case "$answer" in
+      "") return 0 ;;
+      s | S) info "スキップしました。"; return 1 ;;
+      q | Q)
+        say "中断します。あとで first-run-wizard をもう一度実行できます。"
+        exit 0
+        ;;
+      *) say "Enter / s / q のいずれかを入力してください。" ;;
+    esac
+  done
+}
+
+record_failure() {
+  FAILED_STEPS+=("$1")
+  ng "$1"
+}
+
+have() { command -v "$1" >/dev/null 2>&1; }
+
+# ---------------------------------------------------------------------------
+# ステップ 1: Claude Code のログイン
+# ---------------------------------------------------------------------------
+
+step_claude_login() {
+  banner "1/5 Claude Code のログイン"
+  if ! have claude; then
+    record_failure "claude コマンドが見つかりません"
+    return 0
+  fi
+
+  if claude auth status >/dev/null 2>&1; then
+    ok "Claude Code は既にログイン済みです。"
+    return 0
+  fi
+
+  if [ "$HEADLESS" -eq 1 ]; then
+    info "headless モードのため、ログインはスキップします。"
+    return 0
+  fi
+
+  say "ブラウザが開きます。Anthropic アカウントでサインインしてください。"
+  ask_step "Claude Code にログインしますか?" || return 0
+
+  if ! claude auth login </dev/tty; then
+    record_failure "claude auth login が失敗しました"
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# ステップ 2: GitHub / Copilot CLI
+# ---------------------------------------------------------------------------
+
+step_copilot_login() {
+  banner "2/5 GitHub 認証と Copilot CLI"
+  if ! have gh; then
+    record_failure "gh コマンドが見つかりません"
+    return 0
+  fi
+
+  if [ "$HEADLESS" -eq 1 ]; then
+    info "headless モードのため、ログインはスキップします。"
+    return 0
+  fi
+
+  if gh auth status >/dev/null 2>&1; then
+    ok "GitHub には既にログイン済みです。"
+  elif ask_step "gh auth login を実行しますか?"; then
+    gh auth login </dev/tty || record_failure "gh auth login が失敗しました"
+  fi
+
+  if ! have copilot; then
+    record_failure "copilot コマンドが見つかりません"
+    return 0
+  fi
+
+  say "Copilot CLI は初回起動時に /login でサインインします。"
+  if ask_step "Copilot CLI を起動しますか? (終了は /exit)"; then
+    copilot </dev/tty || info "Copilot CLI が 0 以外で終了しました。"
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# ステップ 3: opencode
+# ---------------------------------------------------------------------------
+
+step_opencode_login() {
+  banner "3/5 opencode の認証"
+  if ! have opencode; then
+    record_failure "opencode コマンドが見つかりません"
+    return 0
+  fi
+
+  if [ "$HEADLESS" -eq 1 ]; then
+    info "headless モードのため、認証はスキップします。"
+    return 0
+  fi
+
+  say "使いたいプロバイダを選んで API キーまたはアカウントを設定します。"
+  if ask_step "opencode auth login を実行しますか?"; then
+    opencode auth login </dev/tty || record_failure "opencode auth login が失敗しました"
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# ステップ 4: herdr の Claude Code 統合
+# ---------------------------------------------------------------------------
+
+step_herdr_integration() {
+  banner "4/5 herdr の Claude Code 統合"
+  if ! have herdr; then
+    record_failure "herdr コマンドが見つかりません"
+    return 0
+  fi
+
+  if [ "$HEADLESS" -eq 0 ]; then
+    ask_step "herdr integration install claude を実行しますか?" || return 0
+  fi
+
+  if herdr integration install claude; then
+    ok "herdr の Claude Code 統合を設定しました。"
+  else
+    record_failure "herdr integration install claude が失敗しました"
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# ステップ 5: ユーザー単位のツーリング
+# ---------------------------------------------------------------------------
+
+# Playwright MCP を Claude Code のユーザースコープに登録する。
+# ユーザースコープ設定は ~/.claude.json にランタイム生成されるため、
+# /etc/skel への静的配置ではなくコマンド実行で登録する。
+register_playwright_mcp() {
+  if ! have claude; then
+    record_failure "claude コマンドが見つからないため MCP 登録をスキップしました"
+    return 0
+  fi
+
+  if claude mcp list 2>/dev/null | grep -q '^playwright'; then
+    ok "Playwright MCP は既に登録済みです。"
+    return 0
+  fi
+
+  # グローバル導入済みのバイナリを使う (実行時にネットワークを必要としない)。
+  # 無ければバージョン固定の npx にフォールバックする。
+  local mcp_bin
+  mcp_bin="$(command -v playwright-mcp || true)"
+
+  if [ -n "$mcp_bin" ]; then
+    claude mcp add --scope user playwright -- "$mcp_bin" ||
+      record_failure "Playwright MCP の登録が失敗しました"
+  else
+    claude mcp add --scope user playwright -- \
+      npx "@playwright/mcp@${PLAYWRIGHT_MCP_VERSION}" ||
+      record_failure "Playwright MCP の登録が失敗しました"
+  fi
+
+  if claude mcp list 2>/dev/null | grep -q '^playwright'; then
+    ok "Playwright MCP を登録しました。"
+  fi
+}
+
+# herdr-reviewr は herdr のプラグインで、ユーザー単位に導入される。
+install_herdr_reviewr() {
+  if ! have herdr; then
+    record_failure "herdr コマンドが見つからないためプラグイン導入をスキップしました"
+    return 0
+  fi
+
+  if herdr plugin list 2>/dev/null | grep -q "herdr-reviewr"; then
+    ok "herdr-reviewr は既に導入済みです。"
+  else
+    if ! herdr plugin install "$HERDR_REVIEWR_REPO" --ref "$HERDR_REVIEWR_REF"; then
+      record_failure "herdr plugin install ${HERDR_REVIEWR_REPO} が失敗しました"
+      return 0
+    fi
+    ok "herdr-reviewr ${HERDR_REVIEWR_REF} を導入しました。"
+  fi
+
+  # 過去に glibc のバージョン不整合でバイナリが起動しない問題があったため、
+  # 導入後に実際に起動できるかを確認する。
+  if herdr plugin action list herdr-reviewr >/dev/null 2>&1; then
+    ok "herdr-reviewr の起動確認に成功しました。"
+  else
+    ng "herdr-reviewr の起動確認に失敗しました。"
+    say "  次を実行してログを確認してください: herdr plugin log list herdr-reviewr"
+    FAILED_STEPS+=("herdr-reviewr の起動確認")
+  fi
+}
+
+step_user_tooling() {
+  banner "5/5 Playwright MCP と herdr-reviewr"
+  if [ "$HEADLESS" -eq 0 ]; then
+    ask_step "Playwright MCP の登録と herdr-reviewr の導入を実行しますか?" || return 0
+  fi
+  register_playwright_mcp
+  install_herdr_reviewr
+}
+
+# ---------------------------------------------------------------------------
+# 状態表示
+# ---------------------------------------------------------------------------
+
+show_status() {
+  banner "現在の状態"
+  printf '%-24s %s\n' "claude" "$(have claude && claude --version 2>/dev/null || echo '未導入')"
+  printf '%-24s %s\n' "copilot" "$(have copilot && copilot --version 2>/dev/null || echo '未導入')"
+  printf '%-24s %s\n' "opencode" "$(have opencode && opencode --version 2>/dev/null || echo '未導入')"
+  printf '%-24s %s\n' "herdr" "$(have herdr && herdr --version 2>/dev/null || echo '未導入')"
+  printf '%-24s %s\n' "claude 認証" \
+    "$(have claude && claude auth status >/dev/null 2>&1 && echo 'ログイン済み' || echo '未ログイン')"
+  printf '%-24s %s\n' "gh 認証" \
+    "$(have gh && gh auth status >/dev/null 2>&1 && echo 'ログイン済み' || echo '未ログイン')"
+  printf '%-24s %s\n' "Playwright MCP" \
+    "$(have claude && claude mcp list 2>/dev/null | grep -q '^playwright' && echo '登録済み' || echo '未登録')"
+  printf '%-24s %s\n' "herdr-reviewr" \
+    "$(have herdr && herdr plugin list 2>/dev/null | grep -q herdr-reviewr && echo '導入済み' || echo '未導入')"
+  printf '%-24s %s\n' "完了フラグ" \
+    "$([ -f "$DONE_FLAG" ] && echo "$DONE_FLAG" || echo 'なし')"
+}
+
+# ---------------------------------------------------------------------------
+# メイン
+# ---------------------------------------------------------------------------
+
+main() {
+  local arg
+  for arg in "$@"; do
+    case "$arg" in
+      --headless) HEADLESS=1 ;;
+      --force) FORCE=1 ;;
+      --status) show_status; return 0 ;;
+      -h | --help) usage; return 0 ;;
+      *) say "不明なオプションです: $arg"; usage; return 2 ;;
+    esac
+  done
+
+  if [ -f "$DONE_FLAG" ] && [ "$FORCE" -eq 0 ]; then
+    say "セットアップは完了済みです (${DONE_FLAG})。"
+    say "もう一度実行するには: first-run-wizard --force"
+    return 0
+  fi
+
+  banner "${DISTRO_NAME} AI エージェント初回セットアップ"
+  say "各エージェントの認証と、Claude Code から使うツールの初期設定を行います。"
+  say "いつでも s でスキップ、q で中断できます (あとでやり直せます)。"
+
+  step_claude_login
+  step_copilot_login
+  step_opencode_login
+  step_herdr_integration
+  step_user_tooling
+
+  mkdir -p "$STATE_DIR"
+  date -Iseconds >"$DONE_FLAG"
+
+  banner "完了"
+  if [ "${#FAILED_STEPS[@]}" -gt 0 ]; then
+    say "次の項目は完了していません:"
+    for arg in "${FAILED_STEPS[@]}"; do
+      printf '  - %s\n' "$arg"
+    done
+    say "やり直すには: first-run-wizard --force"
+  else
+    ok "すべてのステップが完了しました。"
+  fi
+  say "完了フラグ: ${DONE_FLAG} (以後この画面は自動起動しません)"
+
+  if [ "$HEADLESS" -eq 0 ]; then
+    printf '\n終了するには Enter を押してください。'
+    read -r _ </dev/tty || true
+  fi
+}
+
+main "$@"
