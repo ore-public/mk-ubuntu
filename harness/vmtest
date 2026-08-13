@@ -1,0 +1,354 @@
+#!/usr/bin/env bash
+#
+# VMware Fusion 上のクリーン VM に対して
+# 「復元 → 転送 → プロビジョン → 検証」を回すための Mac 側 CLI。
+#
+#   ./harness/vmtest reset       clean スナップショットへ復元して起動し、IP を取得する
+#   ./harness/vmtest sync        リポジトリをゲストへ rsync する
+#   ./harness/vmtest provision   ゲストで sudo ./install.sh を実行する
+#   ./harness/vmtest assert      harness/asserts/ を実行し TAP 形式で結果を出す
+#   ./harness/vmtest shot <名前> スクリーンショットを harness/shots/<名前>.png に保存する
+#   ./harness/vmtest e2e         実キー入力 E2E テスト (flaky 許容)
+#   ./harness/vmtest full        上記を通しで実行し、冪等性も確認する
+#   ./harness/vmtest ssh [cmd]   ゲストへ SSH する (デバッグ用)
+#
+set -euo pipefail
+
+HARNESS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${HARNESS_DIR}/.." && pwd)"
+CONFIG_FILE="${HARNESS_DIR}/config.env"
+STATE_DIR="${HARNESS_DIR}/.state"
+IP_FILE="${STATE_DIR}/guest-ip"
+LOG_DIR="${HARNESS_DIR}/logs"
+SHOT_DIR="${HARNESS_DIR}/shots"
+
+VMRUN="${VMRUN:-/Applications/VMware Fusion.app/Contents/Public/vmrun}"
+
+# ---------------------------------------------------------------------------
+# 共通
+# ---------------------------------------------------------------------------
+
+log() { printf '[vmtest] %s\n' "$*" >&2; }
+die() { printf '[vmtest] ERROR: %s\n' "$*" >&2; exit 1; }
+
+load_config() {
+  [ -f "$CONFIG_FILE" ] ||
+    die "${CONFIG_FILE} がありません。config.env.example をコピーして作成してください。"
+  # shellcheck source=/dev/null
+  . "$CONFIG_FILE"
+
+  : "${VMX:?config.env に VMX を設定してください}"
+  : "${GUEST_USER:?config.env に GUEST_USER を設定してください}"
+  SNAPSHOT="${SNAPSHOT:-clean}"
+  SSH_KEY="${SSH_KEY:-${HOME}/.ssh/id_ed25519}"
+  GUEST_REPO_DIR="${GUEST_REPO_DIR:-/home/${GUEST_USER}/distro-setup}"
+  GUEST_SUDO_PASSWORD="${GUEST_SUDO_PASSWORD:-}"
+
+  [ -f "$VMX" ] || die "VMX が見つかりません: ${VMX}"
+  [ -x "$VMRUN" ] || die "vmrun が見つかりません: ${VMRUN}"
+
+  mkdir -p "$STATE_DIR" "$LOG_DIR" "$SHOT_DIR"
+}
+
+guest_ip() {
+  [ -f "$IP_FILE" ] || die "ゲスト IP が未取得です。先に 'vmtest reset' を実行してください。"
+  cat "$IP_FILE"
+}
+
+ssh_opts() {
+  printf '%s\n' \
+    -i "$SSH_KEY" \
+    -o StrictHostKeyChecking=no \
+    -o UserKnownHostsFile=/dev/null \
+    -o LogLevel=ERROR \
+    -o ConnectTimeout=10
+}
+
+# guest_run <コマンド文字列>
+guest_run() {
+  local ip opts=()
+  ip="$(guest_ip)"
+  while IFS= read -r line; do opts+=("$line"); done < <(ssh_opts)
+  # 変数の展開はローカル側で行うのが意図どおり (ゲスト側で解釈させたい変数はない)
+  # shellcheck disable=SC2029
+  ssh "${opts[@]}" "${GUEST_USER}@${ip}" "$@"
+}
+
+# guest_sudo <コマンド文字列>
+# NOPASSWD 前提。パスワードが設定されている場合は sudo -S に流し込む。
+guest_sudo() {
+  if [ -n "$GUEST_SUDO_PASSWORD" ]; then
+    guest_run "printf '%s\n' '${GUEST_SUDO_PASSWORD}' | sudo -S -p '' bash -lc $(printf '%q' "$*")"
+  else
+    guest_run "sudo bash -lc $(printf '%q' "$*")"
+  fi
+}
+
+timestamp() { date +%Y%m%d-%H%M%S; }
+
+# ---------------------------------------------------------------------------
+# reset
+# ---------------------------------------------------------------------------
+
+cmd_reset() {
+  log "スナップショット '${SNAPSHOT}' へ復元します"
+  "$VMRUN" -T fusion revertToSnapshot "$VMX" "$SNAPSHOT" ||
+    die "revertToSnapshot に失敗しました。スナップショット名を確認してください。"
+
+  log "VM を起動します"
+  "$VMRUN" -T fusion start "$VMX" nogui || die "VM の起動に失敗しました。"
+
+  log "ゲストの IP アドレスを待っています"
+  local ip
+  ip="$("$VMRUN" -T fusion getGuestIPAddress "$VMX" -wait)" ||
+    die "getGuestIPAddress に失敗しました。open-vm-tools の導入を確認してください。"
+  printf '%s\n' "$ip" >"$IP_FILE"
+  log "ゲスト IP: ${ip}"
+
+  log "SSH の応答を待っています"
+  local i
+  for i in $(seq 1 60); do
+    if guest_run true 2>/dev/null; then
+      log "SSH 接続に成功しました (${i} 回目)"
+      return 0
+    fi
+    sleep 5
+  done
+  die "SSH に接続できませんでした。"
+}
+
+# ---------------------------------------------------------------------------
+# sync
+# ---------------------------------------------------------------------------
+
+cmd_sync() {
+  local ip opts=() ssh_cmd
+  ip="$(guest_ip)"
+  while IFS= read -r line; do opts+=("$line"); done < <(ssh_opts)
+  ssh_cmd="ssh $(printf '%q ' "${opts[@]}")"
+
+  log "リポジトリを ${GUEST_USER}@${ip}:${GUEST_REPO_DIR} へ転送します"
+  rsync -az --delete \
+    --exclude '.git/' \
+    --exclude 'harness/logs/' \
+    --exclude 'harness/shots/' \
+    --exclude 'harness/.state/' \
+    --exclude 'harness/config.env' \
+    -e "$ssh_cmd" \
+    "${REPO_ROOT}/" "${GUEST_USER}@${ip}:${GUEST_REPO_DIR}/" ||
+    die "rsync に失敗しました。"
+  log "転送が完了しました。"
+}
+
+# ---------------------------------------------------------------------------
+# provision
+# ---------------------------------------------------------------------------
+
+# cmd_provision [ラベル]
+cmd_provision() {
+  local label="${1:-provision}" logfile rc=0
+  logfile="${LOG_DIR}/$(timestamp)-${label}.log"
+
+  log "ゲストで install.sh を実行します (ログ: ${logfile})"
+  if ! guest_sudo "cd ${GUEST_REPO_DIR} && ./install.sh" 2>&1 | tee "$logfile"; then
+    rc="${PIPESTATUS[0]}"
+  fi
+
+  printf '%s\n' "$logfile" >"${STATE_DIR}/last-provision-log"
+  if [ "$rc" -ne 0 ]; then
+    log "install.sh が終了コード ${rc} で終了しました。"
+    return "$rc"
+  fi
+  log "install.sh が正常終了しました。"
+}
+
+# ---------------------------------------------------------------------------
+# assert
+# ---------------------------------------------------------------------------
+
+# ゲストで各 assert スクリプトを実行し、出力の ok / not ok 行を集約して
+# TAP 形式で出力する。1 つでも失敗すれば非 0 で終了する。
+cmd_assert() {
+  local logfile raw script name total=0 failed=0
+  logfile="${LOG_DIR}/$(timestamp)-assert.log"
+  raw="$(mktemp)"
+
+  for script in "${HARNESS_DIR}"/asserts/*.sh; do
+    [ -e "$script" ] || continue
+    name="$(basename "$script")"
+    case "$name" in
+      lib.sh) continue ;;
+    esac
+    printf '# --- %s ---\n' "$name" >>"$raw"
+    if ! guest_run "bash ${GUEST_REPO_DIR}/harness/asserts/${name}" >>"$raw" 2>&1; then
+      printf 'not ok - %s がエラー終了しました\n' "$name" >>"$raw"
+    fi
+  done
+
+  # ok / not ok 行に通し番号を振って TAP にする。
+  # 集計をパイプの外で行うため、いったんログファイルへ書いてから表示する。
+  while IFS= read -r line; do
+    case "$line" in
+      "ok - "*)
+        total=$((total + 1))
+        printf 'ok %d %s\n' "$total" "${line#ok - }"
+        ;;
+      "not ok - "*)
+        total=$((total + 1))
+        failed=$((failed + 1))
+        printf 'not ok %d %s\n' "$total" "${line#not ok - }"
+        ;;
+      *)
+        printf '%s\n' "$line"
+        ;;
+    esac
+  done <"$raw" >"$logfile"
+
+  {
+    printf '1..%d\n' "$total"
+    printf '# 合計 %d 件 / 失敗 %d 件\n' "$total" "$failed"
+  } >>"$logfile"
+
+  cat "$logfile"
+  rm -f "$raw"
+  log "assert のログ: ${logfile}"
+  [ "$failed" -eq 0 ]
+}
+
+# ---------------------------------------------------------------------------
+# shot
+# ---------------------------------------------------------------------------
+
+cmd_shot() {
+  local name="${1:-}"
+  [ -n "$name" ] || die "使い方: vmtest shot <名前>"
+  local out="${SHOT_DIR}/${name}.png"
+  "$VMRUN" -T fusion captureScreen "$VMX" "$out" ||
+    die "captureScreen に失敗しました。"
+  log "スクリーンショット: ${out}"
+}
+
+# ---------------------------------------------------------------------------
+# e2e
+# ---------------------------------------------------------------------------
+
+# レベル 3。タイミング起因で不安定なため 1 回だけリトライし、
+# 失敗しても警告扱いにして終了コードには含めない。
+cmd_e2e() {
+  local logfile script name rc=0
+  logfile="${LOG_DIR}/$(timestamp)-e2e.log"
+  : >"$logfile"
+
+  for script in "${HARNESS_DIR}"/e2e/*.sh; do
+    [ -e "$script" ] || continue
+    name="$(basename "$script")"
+    case "$name" in
+      lib.sh) continue ;;
+    esac
+    printf '# --- %s ---\n' "$name" >>"$logfile"
+    if guest_run "bash ${GUEST_REPO_DIR}/harness/e2e/${name}" >>"$logfile" 2>&1; then
+      printf '# %s: 成功\n' "$name" >>"$logfile"
+    else
+      printf '# %s: 1 回目が失敗。リトライします。\n' "$name" >>"$logfile"
+      if guest_run "bash ${GUEST_REPO_DIR}/harness/e2e/${name}" >>"$logfile" 2>&1; then
+        printf '# %s: リトライで成功\n' "$name" >>"$logfile"
+      else
+        printf '# WARNING: %s はリトライしても失敗しました。実機で手動確認してください。\n' \
+          "$name" >>"$logfile"
+        rc=1
+      fi
+    fi
+  done
+
+  cat "$logfile"
+  log "e2e のログ: ${logfile}"
+  if [ "$rc" -ne 0 ]; then
+    log "WARNING: e2e に失敗があります (vmtest full の終了コードには含めません)。"
+  fi
+  return 0
+}
+
+# ---------------------------------------------------------------------------
+# full
+# ---------------------------------------------------------------------------
+
+cmd_full() {
+  local before after
+  before="${STATE_DIR}/manifest-1.txt"
+  after="${STATE_DIR}/manifest-2.txt"
+
+  cmd_reset
+  cmd_sync
+  cmd_provision "provision-1"
+  guest_sudo "bash ${GUEST_REPO_DIR}/tests/state-manifest.sh" >"$before"
+
+  log "レベル 1 の状態アサーションを実行します"
+  cmd_assert
+
+  log "冪等性の確認: install.sh を 2 回目に実行します"
+  cmd_provision "provision-2"
+  guest_sudo "bash ${GUEST_REPO_DIR}/tests/state-manifest.sh" >"$after"
+
+  if diff -u "$before" "$after" >"${STATE_DIR}/manifest.diff"; then
+    log "冪等性 OK: 2 回目の実行で状態に差分はありません。"
+  else
+    log "冪等性 NG: 差分があります。"
+    cat "${STATE_DIR}/manifest.diff" >&2
+    return 1
+  fi
+
+  log "2 回目の実行後にもう一度アサーションを実行します"
+  cmd_assert
+
+  cmd_shot "desktop-after-provision"
+  cmd_e2e
+
+  log "vmtest full が完了しました (レベル 1 は全通過)。"
+}
+
+# ---------------------------------------------------------------------------
+# その他
+# ---------------------------------------------------------------------------
+
+cmd_ssh() {
+  if [ "$#" -eq 0 ]; then
+    local ip opts=()
+    ip="$(guest_ip)"
+    while IFS= read -r line; do opts+=("$line"); done < <(ssh_opts)
+    exec ssh "${opts[@]}" "${GUEST_USER}@${ip}"
+  fi
+  guest_run "$@"
+}
+
+cmd_ip() { guest_ip; }
+
+usage() {
+  # 冒頭のコメントブロック (2 行目以降の # で始まる行) をそのまま使う
+  awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "${BASH_SOURCE[0]}"
+}
+
+main() {
+  local sub="${1:-}"
+  [ "$#" -gt 0 ] && shift || true
+
+  case "$sub" in
+    "" | -h | --help | help) usage; return 0 ;;
+  esac
+
+  load_config
+
+  case "$sub" in
+    reset) cmd_reset "$@" ;;
+    sync) cmd_sync "$@" ;;
+    provision) cmd_provision "$@" ;;
+    assert) cmd_assert "$@" ;;
+    shot) cmd_shot "$@" ;;
+    e2e) cmd_e2e "$@" ;;
+    full) cmd_full "$@" ;;
+    ssh) cmd_ssh "$@" ;;
+    ip) cmd_ip "$@" ;;
+    *) die "不明なサブコマンドです: ${sub}" ;;
+  esac
+}
+
+main "$@"
