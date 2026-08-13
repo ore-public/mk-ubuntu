@@ -69,6 +69,7 @@ echo
 echo "=== /etc/skel ==="
 hash_tree /etc/skel/.config
 hash_tree /etc/skel/.claude
+hash_path /etc/skel/.zshenv
 hash_path /etc/skel/.zshrc
 hash_path /etc/skel/.zimrc
 # .zim/modules は git clone なので個別ファイルではなくモジュール名の一覧で比較する

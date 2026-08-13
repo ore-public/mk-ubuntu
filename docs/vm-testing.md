@@ -11,6 +11,7 @@ Mac 側で実行する。`harness/config.env` が必要。
 | コマンド | 内容 |
 | --- | --- |
 | `./harness/vmtest reset` | `clean` へ復元 → 起動 → IP 取得 → SSH 疎通待ち |
+| `./harness/vmtest reboot` | ゲストを再起動し、SSH が戻るまで待つ |
 | `./harness/vmtest sync` | リポジトリを rsync でゲストの `~/distro-setup/` へ転送 |
 | `./harness/vmtest provision` | ゲストで `sudo ./install.sh` を実行し、ログを `harness/logs/` に保存 |
 | `./harness/vmtest assert` | `harness/asserts/` をゲスト実行し、TAP 形式で集約出力 |
@@ -22,7 +23,8 @@ Mac 側で実行する。`harness/config.env` が必要。
 ### `vmtest full` の流れ
 
 ```
-reset → sync → provision(1回目) → 状態マニフェスト記録 → assert
+reset → sync → provision(1回目) → 状態マニフェスト記録
+     → reboot → assert
      → provision(2回目) → 状態マニフェスト記録 → マニフェスト差分ゼロを確認
      → assert → shot → e2e
 ```
@@ -72,9 +74,17 @@ TAP の読み方: `ok N 説明` が成功、`not ok N 説明` が失敗、`# ` �
 `harness/e2e/10-key-remap.sh` は ydotool でキーイベントを注入し、
 xremap が作る仮想入力デバイスを `probe.py` で読んで変換結果を確認する。
 
-タイミングとフォーカス状態に依存するため不安定。
-特に「Alt-c → Ctrl-c」はフォーカス中のウィンドウがターミナルでないことが前提なので、
-失敗しても実機の手動確認に回す。
+`keymap` の確認 (Ctrl-p → Up、Alt-c → Ctrl-c) はフォーカス中のウィンドウの
+WM_CLASS を見て `application:` 条件を評価するため、非ターミナルのウィンドウが
+フォーカスされていないと 1 つも適用されない。スクリプトは事前に
+gnome-text-editor などを開いてフォーカスを作る。
+
+それでもタイミングに依存するため不安定。失敗しても実機の手動確認に回す
+(`vmtest full` の終了コードには含めない)。
+
+`vmtest shot` には `config.env` の `GUEST_PASSWORD` が必要。
+`vmrun captureScreen` がゲストへのログインを要求するため。
+未設定なら撮影を飛ばして先へ進む (レベル 1 の判定には影響しない)。
 
 ---
 

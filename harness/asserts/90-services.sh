@@ -9,6 +9,16 @@ set -uo pipefail
 
 UID_NUM="$(id -u)"
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/${UID_NUM}}"
+# SSH 経由だとセッションバスのアドレスが渡ってこないので明示する
+export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=${XDG_RUNTIME_DIR}/bus}"
+
+# xremap のユニットは ~/.config/xremap/config.yml がないと起動しない。
+# /etc/skel は新規ユーザーにしか効かないので、既存ユーザーには
+# 70-existing-users.sh が配る。まずそれが届いているかを見る。
+check_file "${HOME}/.config/xremap/config.yml" \
+  "既存ユーザーのホームに xremap の設定が配られている"
+check "既存ユーザーが input グループに入っている" \
+  bash -c "id -nG | tr ' ' '\n' | grep -qx input"
 
 if [ ! -S "${XDG_RUNTIME_DIR}/systemd/private" ] &&
   ! systemctl --user is-system-running >/dev/null 2>&1; then
@@ -39,16 +49,27 @@ else
     while IFS= read -r l; do diag "$l"; done
 fi
 
-# GNOME Shell の拡張が実際に読み込まれているか (Wayland のアプリ別リマップに必須)
+# GNOME Shell の拡張が実際に読み込まれているか (Wayland のアプリ別リマップに必須)。
+# WMClass はフォーカス中のウィンドウがないと値を返せず応答しないので、
+# 常に JSON 文字列を返す ActiveWindow を使う。
 if command -v gdbus >/dev/null 2>&1; then
   if gdbus call --session --dest org.gnome.Shell \
     --object-path /com/k0kubun/Xremap \
-    --method com.k0kubun.Xremap.WMClass >/dev/null 2>&1; then
+    --method com.k0kubun.Xremap.ActiveWindow >/dev/null 2>&1; then
     pass "xremap の GNOME 拡張が D-Bus に応答する"
   else
     fail "xremap の GNOME 拡張が D-Bus に応答する"
     diag "GNOME Shell の再ログインが必要か、拡張が有効化されていない可能性があります。"
+    gnome-extensions info xremap@k0kubun.com 2>&1 | head -n 8 |
+      while IFS= read -r l; do diag "$l"; done
   fi
+fi
+
+# Ubuntu が既定で有効にしている拡張を消していないこと
+# (enabled-extensions をシステム既定値で上書きする副作用の確認)
+if command -v gnome-extensions >/dev/null 2>&1; then
+  check_cmd_output "Ubuntu 標準の Dock 拡張が有効なままである" "ubuntu-dock@ubuntu.com" \
+    gnome-extensions list --enabled
 fi
 
 assert_exit

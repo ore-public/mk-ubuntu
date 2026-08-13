@@ -10,8 +10,13 @@ check "DSHELL の行が 1 行だけ (追記の重複がない)" \
   bash -c "[ \"\$(grep -c '^DSHELL=' /etc/adduser.conf)\" -eq 1 ]"
 
 check_file /usr/local/share/zimfw/zimfw.zsh
+check_file /etc/skel/.zshenv
 check_file /etc/skel/.zshrc
 check_file /etc/skel/.zimrc
+
+# システム側の compinit を止めて zimfw の completion モジュールに任せる
+check_contains /etc/skel/.zshenv "^skip_global_compinit=1$" \
+  "/etc/skel/.zshenv が skip_global_compinit=1 を設定している"
 
 check_contains /etc/skel/.zimrc "^zmodule fzf$" \
   "/etc/skel/.zimrc に zmodule fzf がある"

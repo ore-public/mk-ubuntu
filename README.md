@@ -50,6 +50,7 @@ modules/                機能単位のスクリプト。番号プレフィッ�
   50-herdr.sh             herdr
   60-agents.sh            Node.js と AI エージェント各種、初回ウィザード
   65-agent-tooling.sh     Playwright MCP、共有ブラウザ、herdr 操作スキル
+  70-existing-users.sh    既存ユーザーへの設定配布と input グループ追加
 files/                  配置する設定ファイルの原本
   skel/                   /etc/skel に置くもの
   systemd/                /etc/systemd/user に置くもの
@@ -259,9 +260,33 @@ extensions.gnome.org の配布物 (v15、GNOME 45〜50 対応) をリポジト�
 `/etc/dconf/db/local.d/30-extensions` の 1 ファイルだけに書き込む。
 和集合をソートして書くので、何度実行しても結果は同じ。
 
+### /etc/skel は既存ユーザーには届かないので、別モジュールで配る
+
+`/etc/skel` が効くのは「これから作られるユーザー」だけで、
+**install.sh を実行した本人には何も届かない**。実機検証で、xremap の systemd
+ユニットが `ConditionPathExists=%h/.config/xremap/config.yml` を満たせず
+起動すらしていないことで判明した。
+
+そのため `70-existing-users.sh` が、既存ユーザー (UID 1000-59999) に対して
+`/etc/skel` の内容のうち**まだ存在しないファイルだけ**を配る
+(`cp -r --update=none`)。対象ユーザー自身として実行するので所有者は自動的に正しくなり、
+既存の設定を壊さない。あわせて `input` グループにも追加する
+(xremap が入力デバイスを読むのに必要)。
+
+ログインシェルの変更だけは自動で行わず `chsh` の案内にとどめている。
+利用者が意図せずシェルを変えられるのを避けるため。
+
+なお、autoinstall ISO や Cubic で使う場合は、利用者アカウントが
+インストーラによって後から作られるため `/etc/skel` だけで足りる。
+このモジュールは「既に使っている Ubuntu に後から適用する」場合のためのもの。
+
 ### xremap の systemd ユニット
 
 - パスに `/home/<user>` を書かず `%h` を使う
+- **`--watch=device` を付ける。** xremap は既定では起動時に存在した入力デバイスしか
+  掴まない。これがないと、ログイン後に挿した USB / Bluetooth キーボードで
+  リマップがまったく効かない (VM 検証で、後から作られた仮想デバイスの
+  キー入力が 1 件も変換されないことで判明した)
 - `After=graphical-session.target` + `ExecStartPre=/usr/bin/sleep 5` で
   GNOME Shell と拡張の起動を待つ
 - `Restart=always`
@@ -291,7 +316,9 @@ x86_64 では baseline 版ではない通常版を使っている。
 `/etc/environment` (PAM 経由でグラフィカルセッションに効く) と
 `/etc/profile.d/mk-ubuntu-playwright.sh` (ログインシェル用) の両方で設定する。
 
-**ディスクサイズへの影響**: Chromium のみで約 400 MB。
+**ディスクサイズへの影響**: arm64 の実測で **982 MB**。
+`playwright install chromium` は Chromium 本体だけでなく
+Chrome Headless Shell と ffmpeg も入れるため、この容量になる。
 ユーザーごとに `~/.cache/ms-playwright` へ落とすと人数分かかるところを 1 回で済ませる。
 `playwright install --with-deps chromium` は依存ライブラリの apt 導入も行う。
 
@@ -352,6 +379,16 @@ Claude Code はスキル名をディレクトリ名から決めるため、
 `lib/common.sh` の `pick_arch` が `dpkg --print-architecture` の結果で分岐する。
 `harness/asserts/05-arch.sh` が、配置されたバイナリの ELF マシン種別が
 実行環境と一致していることを検証する。
+
+### keymap はフォーカス中のウィンドウがないと適用されない
+
+`keymap` の `application:` 条件は、フォーカス中のウィンドウの WM_CLASS を
+GNOME 拡張から取得して評価する。フォーカス中のウィンドウが 1 つもないと
+WM_CLASS が取れず、`not:` を書いていても keymap は適用されない。
+`modmap` (CapsLock → Ctrl) はフォーカスに依存せず常に効く。
+
+そのため `harness/e2e/10-key-remap.sh` は、keymap の確認の前に
+非ターミナルのウィンドウ (gnome-text-editor など) を開いてフォーカスを作る。
 
 ### VM 検証での描画性能について
 

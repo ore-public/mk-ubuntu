@@ -19,6 +19,8 @@ DONE_FLAG="${STATE_DIR}/wizard-done"
 PLAYWRIGHT_MCP_VERSION="0.0.79"
 HERDR_REVIEWR_REPO="persiyanov/herdr-reviewr"
 HERDR_REVIEWR_REF="v0.30.4"
+# herdr が付けるプラグイン ID (リポジトリ名とは異なる)
+HERDR_REVIEWR_PLUGIN_ID="persiyanov.reviewr"
 
 HEADLESS=0
 FORCE=0
@@ -230,32 +232,58 @@ register_playwright_mcp() {
   fi
 }
 
+# 導入した herdr-reviewr のバイナリが実際に起動するかを確認する。
+#
+# 過去に glibc のバージョン不整合でバイナリが起動しない問題があった
+# (現在は musl ビルドで解消)。その失敗はローダーの段階で起きるので、
+# バイナリを実行してローダーのエラーが出ないことを見る。
+# herdr-reviewr は TUI なので、端末がないと ratatui の初期化で panic するが、
+# そこまで到達していれば「バイナリは起動できた」と判断してよい。
+verify_herdr_reviewr() {
+  local bin out
+  bin="$(find "${HOME}/.config/herdr/plugins" -type f -name 'herdr-reviewr' 2>/dev/null | head -n 1)"
+
+  if [ -z "$bin" ]; then
+    ng "herdr-reviewr のバイナリが見つかりません。"
+    FAILED_STEPS+=("herdr-reviewr の起動確認")
+    return 0
+  fi
+
+  out="$("$bin" --version 2>&1 || true)"
+  case "$out" in
+    *"GLIBC_"* | *"error while loading shared libraries"* | *"cannot execute"* | *"not found"*)
+      ng "herdr-reviewr の起動確認に失敗しました (共有ライブラリの解決に失敗)。"
+      printf '%s\n' "$out" | head -n 5
+      say "  次を実行してログを確認してください: herdr plugin log list"
+      FAILED_STEPS+=("herdr-reviewr の起動確認")
+      ;;
+    *)
+      ok "herdr-reviewr のバイナリを起動できました。"
+      ;;
+  esac
+}
+
 # herdr-reviewr は herdr のプラグインで、ユーザー単位に導入される。
+# 導入されるプラグイン ID は リポジトリ名ではなく persiyanov.reviewr になる。
 install_herdr_reviewr() {
   if ! have herdr; then
     record_failure "herdr コマンドが見つからないためプラグイン導入をスキップしました"
     return 0
   fi
 
-  if herdr plugin list 2>/dev/null | grep -q "herdr-reviewr"; then
+  if herdr plugin list 2>/dev/null | grep -q "$HERDR_REVIEWR_PLUGIN_ID"; then
     ok "herdr-reviewr は既に導入済みです。"
   else
-    if ! herdr plugin install "$HERDR_REVIEWR_REPO" --ref "$HERDR_REVIEWR_REF"; then
+    # 標準入力が対話的でないときは --yes が必須。
+    # 実行するかどうかはこのステップの冒頭で利用者に確認済み。
+    if ! herdr plugin install "$HERDR_REVIEWR_REPO" --ref "$HERDR_REVIEWR_REF" --yes; then
       record_failure "herdr plugin install ${HERDR_REVIEWR_REPO} が失敗しました"
       return 0
     fi
     ok "herdr-reviewr ${HERDR_REVIEWR_REF} を導入しました。"
   fi
 
-  # 過去に glibc のバージョン不整合でバイナリが起動しない問題があったため、
-  # 導入後に実際に起動できるかを確認する。
-  if herdr plugin action list herdr-reviewr >/dev/null 2>&1; then
-    ok "herdr-reviewr の起動確認に成功しました。"
-  else
-    ng "herdr-reviewr の起動確認に失敗しました。"
-    say "  次を実行してログを確認してください: herdr plugin log list herdr-reviewr"
-    FAILED_STEPS+=("herdr-reviewr の起動確認")
-  fi
+  verify_herdr_reviewr
 }
 
 step_user_tooling() {
@@ -284,7 +312,7 @@ show_status() {
   printf '%-24s %s\n' "Playwright MCP" \
     "$(have claude && claude mcp list 2>/dev/null | grep -q '^playwright' && echo '登録済み' || echo '未登録')"
   printf '%-24s %s\n' "herdr-reviewr" \
-    "$(have herdr && herdr plugin list 2>/dev/null | grep -q herdr-reviewr && echo '導入済み' || echo '未導入')"
+    "$(have herdr && herdr plugin list 2>/dev/null | grep -q "$HERDR_REVIEWR_PLUGIN_ID" && echo '導入済み' || echo '未導入')"
   printf '%-24s %s\n' "完了フラグ" \
     "$([ -f "$DONE_FLAG" ] && echo "$DONE_FLAG" || echo 'なし')"
 }

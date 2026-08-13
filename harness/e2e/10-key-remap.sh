@@ -86,17 +86,62 @@ run_case() {
   rm -f "$out"
 }
 
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=${XDG_RUNTIME_DIR}/bus}"
+
+# keymap の変換は application 条件 (ターミナルを除外) の評価を伴うため、
+# 非ターミナルのウィンドウにフォーカスがないと 1 つも適用されない。
+# そこでテスト用のウィンドウを開いてフォーカスを作る。
+WINDOW_UNIT="e2e-focus-window"
+
+focused_wm_class() {
+  gdbus call --session --dest org.gnome.Shell \
+    --object-path /com/k0kubun/Xremap \
+    --method com.k0kubun.Xremap.ActiveWindow 2>/dev/null
+}
+
+open_focus_window() {
+  local app
+  for app in gnome-text-editor gnome-calculator gnome-disks; do
+    command -v "$app" >/dev/null 2>&1 || continue
+    systemd-run --user --unit="$WINDOW_UNIT" --collect "$app" >/dev/null 2>&1 || continue
+    local attempt=0
+    while [ "$attempt" -lt 10 ]; do
+      attempt=$((attempt + 1))
+      sleep 2
+      case "$(focused_wm_class)" in
+        *wm_class*ghostty* | *wm_class*Ptyxis*) ;;
+        *wm_class*) info "フォーカス用ウィンドウ: $(focused_wm_class)"; return 0 ;;
+      esac
+    done
+    systemd-run --user --unit="$WINDOW_UNIT" --collect true >/dev/null 2>&1 || true
+  done
+  return 1
+}
+
+# trap から呼ばれる
+# shellcheck disable=SC2329
+close_focus_window() {
+  systemctl --user stop "${WINDOW_UNIT}.service" >/dev/null 2>&1 || true
+}
+trap close_focus_window EXIT
+
 info "xremap のキー変換を実キー入力で確認します"
 
+# modmap による変換はフォーカス状態に依存しない
 run_case "CapsLock が Ctrl になる" \
   "${KEY_CAPSLOCK}:1 ${KEY_CAPSLOCK}:0" "$KEY_LEFTCTRL"
 
-run_case "Ctrl-p が Up になる" \
-  "${KEY_LEFTCTRL}:1 ${KEY_P}:1 ${KEY_P}:0 ${KEY_LEFTCTRL}:0" "$KEY_UP"
+if open_focus_window; then
+  run_case "Ctrl-p が Up になる" \
+    "${KEY_LEFTCTRL}:1 ${KEY_P}:1 ${KEY_P}:0 ${KEY_LEFTCTRL}:0" "$KEY_UP"
 
-# 非ターミナルにフォーカスがある前提。フォーカス次第で結果が変わるため特に不安定。
-run_case "Alt-c が Ctrl-c になる (非ターミナル)" \
-  "${KEY_LEFTALT}:1 ${KEY_C}:1 ${KEY_C}:0 ${KEY_LEFTALT}:0" "$KEY_LEFTCTRL"
+  run_case "Alt-c が Ctrl-c になる (非ターミナル)" \
+    "${KEY_LEFTALT}:1 ${KEY_C}:1 ${KEY_C}:0 ${KEY_LEFTALT}:0" "$KEY_LEFTCTRL"
+else
+  info "非ターミナルのウィンドウを開けなかったため、keymap の確認をスキップします。"
+  info "実機の手動確認に回してください。"
+fi
 
 info "失敗数: ${FAILURES}"
 exit "$FAILURES"

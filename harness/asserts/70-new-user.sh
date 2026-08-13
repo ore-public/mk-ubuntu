@@ -46,11 +46,23 @@ check "skel から zimfw モジュールが継承されている" \
 check "ホーム配下の所有者がテストユーザーである" \
   bash -c "[ \"\$(sudo -n stat -c %U ${HOME_DIR}/.zshrc)\" = ${TEST_USER} ]"
 
-# 初回シェル起動で zimfw の init.zsh が生成されること (ネットワーク不要)
-if sudo -n -u "$TEST_USER" env HOME="$HOME_DIR" zsh -i -c 'exit' >/dev/null 2>&1; then
+# 初回シェル起動で zimfw の init.zsh が生成されること (ネットワーク不要)。
+# 端末がないため zle 関連の警告は出るが、これは無視してよい。
+ZSH_OUT="$(sudo -n -u "$TEST_USER" env HOME="$HOME_DIR" zsh -i -c 'exit 0' 2>&1)"
+ZSH_RC=$?
+if [ "$ZSH_RC" -eq 0 ]; then
   pass "テストユーザーで対話 zsh が起動できた"
 else
   fail "テストユーザーで対話 zsh の起動に失敗した"
+  printf '%s\n' "$ZSH_OUT" | head -n 10 | while IFS= read -r l; do diag "$l"; done
+fi
+
+# zimfw の completion モジュールと Ubuntu の compinit の二重初期化がないこと
+if printf '%s' "$ZSH_OUT" | grep -q "completion was already initialized"; then
+  fail "compinit の二重初期化の警告が出ていない"
+  diag "/etc/skel/.zshenv の skip_global_compinit=1 が効いていません。"
+else
+  pass "compinit の二重初期化の警告が出ていない"
 fi
 check "初回起動で ~/.zim/init.zsh が生成された" \
   sudo -n test -f "${HOME_DIR}/.zim/init.zsh"

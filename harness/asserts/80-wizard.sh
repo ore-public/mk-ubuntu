@@ -34,9 +34,11 @@ check "--force なら完了フラグがあっても動く" "$WIZARD" --force --h
 # Playwright MCP のユーザースコープ登録
 check_cmd_output "claude mcp list に playwright がある" "playwright" claude mcp list
 
-# herdr-reviewr (ネットワークやプラグイン API の都合で失敗しうるため診断のみ)
-if herdr plugin list 2>/dev/null | grep -q herdr-reviewr; then
+# herdr-reviewr。導入されるプラグイン ID はリポジトリ名ではなく persiyanov.reviewr。
+if herdr plugin list 2>/dev/null | grep -q "persiyanov.reviewr"; then
   pass "herdr-reviewr が導入されている"
+  check_cmd_output "ウィザードが herdr-reviewr の起動確認まで到達している" \
+    "herdr-reviewr のバイナリを起動できました" cat "$OUT"
 else
   diag "herdr-reviewr は未導入です。ウィザードの出力を確認してください:"
   grep -i "herdr" "$OUT" | head -n 10 | while IFS= read -r l; do diag "$l"; done

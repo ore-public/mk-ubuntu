@@ -45,8 +45,11 @@ check_contains /etc/skel/.config/xremap/config.yml "Ctrl-p: Up" \
 
 # systemd user unit
 check_file /etc/systemd/user/xremap.service
-check_contains /etc/systemd/user/xremap.service "ExecStart=/usr/local/bin/xremap %h/" \
+check_contains /etc/systemd/user/xremap.service "ExecStart=/usr/local/bin/xremap .*%h/" \
   "unit がホームを %h で参照している (ハードコードしていない)"
+# 起動後に挿したキーボードにもリマップを効かせるために必須
+check_contains /etc/systemd/user/xremap.service "\\-\\-watch=device" \
+  "unit が --watch=device を付けている"
 check "unit に /home/ のハードコードがない" \
   bash -c "! grep -q '/home/' /etc/systemd/user/xremap.service"
 check_contains /etc/systemd/user/xremap.service "^Restart=always$" "unit に Restart=always がある"

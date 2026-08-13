@@ -4,6 +4,7 @@
 # 「復元 → 転送 → プロビジョン → 検証」を回すための Mac 側 CLI。
 #
 #   ./harness/vmtest reset       clean スナップショットへ復元して起動し、IP を取得する
+#   ./harness/vmtest reboot      ゲストを再起動し、SSH が戻るまで待つ
 #   ./harness/vmtest sync        リポジトリをゲストへ rsync する
 #   ./harness/vmtest provision   ゲストで sudo ./install.sh を実行する
 #   ./harness/vmtest assert      harness/asserts/ を実行し TAP 形式で結果を出す
@@ -43,6 +44,7 @@ load_config() {
   SSH_KEY="${SSH_KEY:-${HOME}/.ssh/id_ed25519}"
   GUEST_REPO_DIR="${GUEST_REPO_DIR:-/home/${GUEST_USER}/distro-setup}"
   GUEST_SUDO_PASSWORD="${GUEST_SUDO_PASSWORD:-}"
+  GUEST_PASSWORD="${GUEST_PASSWORD:-}"
 
   [ -f "$VMX" ] || die "VMX が見つかりません: ${VMX}"
   [ -x "$VMRUN" ] || die "vmrun が見つかりません: ${VMRUN}"
@@ -96,7 +98,12 @@ cmd_reset() {
     die "revertToSnapshot に失敗しました。スナップショット名を確認してください。"
 
   log "VM を起動します"
-  "$VMRUN" -T fusion start "$VMX" nogui || die "VM の起動に失敗しました。"
+  # vmrun start が生成する vmware-vmx はこのプロセスの標準出力を引き継いで
+  # 動き続けるため、パイプに繋いだまま起動するとパイプが閉じず、
+  # vmtest の出力を tee や tail に渡したときに終わらなくなる。
+  # そのため vmware-vmx には /dev/null を渡す。
+  "$VMRUN" -T fusion start "$VMX" nogui >/dev/null 2>&1 ||
+    die "VM の起動に失敗しました。"
 
   log "ゲストの IP アドレスを待っています"
   local ip
@@ -115,6 +122,51 @@ cmd_reset() {
     sleep 5
   done
   die "SSH に接続できませんでした。"
+}
+
+# ---------------------------------------------------------------------------
+# reboot
+# ---------------------------------------------------------------------------
+
+# dconf のシステム既定値・GNOME 拡張・systemd ユーザーサービスは、
+# プロビジョン後に作られたセッションでないと反映されない。
+# 実際の利用者が体験する状態を検証するため、assert の前に必ず再起動する。
+cmd_reboot() {
+  local before_boot_id after_boot_id i ip
+
+  # 再起動したことを確実に判定するため、起動ごとに変わる boot_id を控えておく
+  before_boot_id="$(guest_run 'cat /proc/sys/kernel/random/boot_id' 2>/dev/null || true)"
+
+  log "ゲストを再起動します"
+  guest_sudo "systemctl reboot" >/dev/null 2>&1 || true
+
+  # 落ちきる前に SSH が通ってしまうと再起動前のシステムを見てしまう
+  sleep 15
+
+  log "再起動後の SSH 応答を待っています"
+  for i in $(seq 1 60); do
+    after_boot_id="$(guest_run 'cat /proc/sys/kernel/random/boot_id' 2>/dev/null || true)"
+    if [ -n "$after_boot_id" ] && [ "$after_boot_id" != "$before_boot_id" ]; then
+      log "再起動を確認しました (${i} 回目)"
+      # グラフィカルセッションの起動と xremap の ExecStartPre=sleep 5 を待つ
+      sleep 25
+      return 0
+    fi
+
+    # DHCP のリースが変わって IP が変わった場合はここで取り直す
+    # (getGuestIPAddress は open-vm-tools が上がるまで失敗するので、
+    #  失敗しても致命エラーにはしない)
+    if [ "$i" -eq 12 ] || [ "$i" -eq 30 ]; then
+      if ip="$("$VMRUN" -T fusion getGuestIPAddress "$VMX" -wait 2>/dev/null)" &&
+        [ -n "$ip" ] && [ "$ip" != "$(cat "$IP_FILE" 2>/dev/null)" ]; then
+        printf '%s\n' "$ip" >"$IP_FILE"
+        log "ゲスト IP が変わりました: ${ip}"
+      fi
+    fi
+
+    sleep 5
+  done
+  die "再起動後に SSH へ接続できませんでした。"
 }
 
 # ---------------------------------------------------------------------------
@@ -219,12 +271,24 @@ cmd_assert() {
 # shot
 # ---------------------------------------------------------------------------
 
+# vmrun captureScreen はゲストへのログインを要求する
+# (認証情報なしでは "Anonymous guest operations are not allowed" で失敗する)。
+# GNOME 50 は D-Bus 経由のスクリーンショットを拒否するので、ゲスト内で
+# 撮る代替手段は使えない。したがってパスワード未設定なら撮影は行わない。
 cmd_shot() {
   local name="${1:-}"
   [ -n "$name" ] || die "使い方: vmtest shot <名前>"
   local out="${SHOT_DIR}/${name}.png"
-  "$VMRUN" -T fusion captureScreen "$VMX" "$out" ||
-    die "captureScreen に失敗しました。"
+
+  if [ -z "$GUEST_PASSWORD" ]; then
+    log "config.env の GUEST_PASSWORD が未設定のため、スクリーンショットを撮りません。"
+    log "レベル 2 の視覚判定を行うには GUEST_PASSWORD を設定してください。"
+    return 1
+  fi
+
+  "$VMRUN" -T fusion -gu "$GUEST_USER" -gp "$GUEST_PASSWORD" \
+    captureScreen "$VMX" "$out" ||
+    die "captureScreen に失敗しました。GUEST_PASSWORD が正しいか確認してください。"
   log "スクリーンショット: ${out}"
 }
 
@@ -282,6 +346,9 @@ cmd_full() {
   cmd_provision "provision-1"
   guest_sudo "bash ${GUEST_REPO_DIR}/tests/state-manifest.sh" >"$before"
 
+  # 反映にログインし直しが必要な設定があるため、検証の前に再起動する
+  cmd_reboot
+
   log "レベル 1 の状態アサーションを実行します"
   cmd_assert
 
@@ -300,7 +367,9 @@ cmd_full() {
   log "2 回目の実行後にもう一度アサーションを実行します"
   cmd_assert
 
-  cmd_shot "desktop-after-provision"
+  # レベル 2 (スクリーンショット) は人が見て判断するものなので、
+  # 撮れなくても全体の終了コードには含めない。
+  cmd_shot "desktop-after-provision" || log "WARNING: スクリーンショットを取得できませんでした。"
   cmd_e2e
 
   log "vmtest full が完了しました (レベル 1 は全通過)。"
@@ -339,6 +408,7 @@ main() {
 
   case "$sub" in
     reset) cmd_reset "$@" ;;
+    reboot) cmd_reboot "$@" ;;
     sync) cmd_sync "$@" ;;
     provision) cmd_provision "$@" ;;
     assert) cmd_assert "$@" ;;

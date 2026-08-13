@@ -33,6 +33,9 @@ install_zimfw_script() {
 }
 
 install_skel_dotfiles() {
+  # .zshenv は /etc/zsh/zshrc より先に読まれる必要がある
+  # (システム側の compinit を止めて zimfw に任せるため)
+  install_file "${REPO_ROOT}/files/skel/.zshenv" "${SKEL}/.zshenv" 0644
   install_file "${REPO_ROOT}/files/skel/.zshrc" "${SKEL}/.zshrc" 0644
   install_file "${REPO_ROOT}/files/skel/.zimrc" "${SKEL}/.zimrc" 0644
 }
