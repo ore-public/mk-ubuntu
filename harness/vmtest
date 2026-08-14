@@ -133,20 +133,35 @@ cmd_reset() {
 # dconf のシステム既定値・GNOME 拡張・systemd ユーザーサービスは、
 # プロビジョン後に作られたセッションでないと反映されない。
 # 実際の利用者が体験する状態を検証するため、assert の前に必ず再起動する。
+# reboot を 1 回投げる。出力は捨てずにログへ回す。
+# (SSH は再起動で切れるため、コマンド自体は非 0 で終わるのが正常)
+issue_reboot() {
+  local out
+  out="$(guest_sudo "systemctl reboot" 2>&1 || true)"
+  if [ -n "$out" ]; then
+    printf '%s\n' "$out" | while IFS= read -r l; do log "  reboot: ${l}"; done
+  fi
+}
+
 cmd_reboot() {
-  local before_boot_id after_boot_id i ip
+  local before_boot_id after_boot_id i ip reissued=0
+
+  # 直前まで apt が動いていると再起動が阻害されることがあるので、
+  # パッケージ処理が終わるのを待ってから投げる
+  log "パッケージ処理が終わるのを待ちます"
+  guest_sudo "apt-get -o DPkg::Lock::Timeout=600 check" >/dev/null 2>&1 || true
 
   # 再起動したことを確実に判定するため、起動ごとに変わる boot_id を控えておく
   before_boot_id="$(guest_run 'cat /proc/sys/kernel/random/boot_id' 2>/dev/null || true)"
 
   log "ゲストを再起動します"
-  guest_sudo "systemctl reboot" >/dev/null 2>&1 || true
+  issue_reboot
 
   # 落ちきる前に SSH が通ってしまうと再起動前のシステムを見てしまう
   sleep 15
 
   log "再起動後の SSH 応答を待っています"
-  for i in $(seq 1 60); do
+  for i in $(seq 1 120); do
     after_boot_id="$(guest_run 'cat /proc/sys/kernel/random/boot_id' 2>/dev/null || true)"
     if [ -n "$after_boot_id" ] && [ "$after_boot_id" != "$before_boot_id" ]; then
       log "再起動を確認しました (${i} 回目)"
@@ -155,10 +170,22 @@ cmd_reboot() {
       return 0
     fi
 
+    # ゲストにまだ繋がるのに boot_id が変わらない = 再起動コマンドが効いていない。
+    # 1 回だけ投げ直す (何かに阻害されて落ちなかった場合の救済)。
+    if [ "$i" -eq 24 ] && [ "$reissued" -eq 0 ] && [ -n "$after_boot_id" ]; then
+      log "まだ再起動していないため、もう一度 reboot を投げます"
+      issue_reboot
+      reissued=1
+    fi
+
+    if [ $((i % 12)) -eq 0 ]; then
+      log "  待機中 (${i}/120)"
+    fi
+
     # DHCP のリースが変わって IP が変わった場合はここで取り直す
     # (getGuestIPAddress は open-vm-tools が上がるまで失敗するので、
     #  失敗しても致命エラーにはしない)
-    if [ "$i" -eq 12 ] || [ "$i" -eq 30 ]; then
+    if [ "$i" -eq 12 ] || [ "$i" -eq 40 ]; then
       if ip="$("$VMRUN" -T fusion getGuestIPAddress "$VMX" -wait 2>/dev/null)" &&
         [ -n "$ip" ] && [ "$ip" != "$(cat "$IP_FILE" 2>/dev/null)" ]; then
         printf '%s\n' "$ip" >"$IP_FILE"
