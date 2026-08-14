@@ -16,6 +16,7 @@ lib/common.sh           全モジュール共通のヘルパー (ログ / 冪等
 modules/                機能単位のスクリプト。番号プレフィックスで実行順を制御する
   10-packages.sh          apt の基礎パッケージ
   15-brave.sh             Brave の導入と既定ブラウザ化
+  17-desktop-apps.sh      Discord / Zoom / 1Password / Dropbox (公式配布版)
   20-zsh-zimfw.sh         zsh + zimfw
   25-ghostty.sh           Ghostty の設定と既定ターミナル化
   30-xremap.sh            Mac 風キー操作
@@ -23,6 +24,7 @@ modules/                機能単位のスクリプト。番号プレフィッ�
   42-gnome-desktop.sh     スクリーンショットとトラックパッドの Mac 化
   45-vicinae.sh           ランチャー Vicinae とクリップボード履歴の拡張
   50-herdr.sh             herdr
+  55-docker.sh            Docker Engine (Docker 公式リポジトリ)
   60-agents.sh            Node.js と AI エージェント各種、初回ウィザード
   65-agent-tooling.sh     Playwright MCP、共有ブラウザ、herdr 操作スキル
   70-existing-users.sh    既存ユーザーへの設定配布と input グループ追加
@@ -125,12 +127,76 @@ sudo bash modules/30-xremap.sh   # 直接実行もできる
 | GNOME | 50。Wayland セッションのみ | xremap の GNOME 拡張が必須。X.org 前提の手順は使わない |
 | Ghostty | universe に 1.3.0 | `apt install ghostty` で導入。ソースビルドしない |
 
-### 外部 apt リポジトリは Brave のみ
+### 外部 apt リポジトリはベンダー公式のものだけ
 
-原則として外部 apt リポジトリは追加しない。**Brave (`15-brave.sh`) だけを例外**とする。
-Brave は個別バージョンの固定 URL を公開しておらず、リポジトリのローリング配信だけを提供している。
-そのため Brave はバージョン固定せず、**リポジトリ署名 (`Signed-By`) を信頼の根拠**とする。
-他の外部バイナリはすべてバージョン固定 + SHA256 検証を行う。
+原則として外部 apt リポジトリは追加しない。追加するのは
+**そのソフトウェアのベンダー自身が運用しているリポジトリ**に限る。
+どれも `apt-key` を使わず `/etc/apt/keyrings/` + `Signed-By` の keyring 方式、
+deb822 形式で記述する。
+
+| リポジトリ | モジュール | 使う理由 |
+| --- | --- | --- |
+| Brave | `15-brave.sh` | 個別バージョンの固定 URL が公開されていない |
+| 1Password | `17-desktop-apps.sh` | パスワード管理ソフトなので更新が届く経路を優先する |
+| Docker | `55-docker.sh` | Ubuntu の `docker.io` ではなく公式版を使うため |
+
+これらは個別バージョンを固定せず、**リポジトリ署名を信頼の根拠**とする。
+リポジトリを持たない外部バイナリは、バージョン固定 + SHA256 検証を行う。
+
+### デスクトップアプリは公式配布版のみ。ただし 4 つとも amd64 限定
+
+Discord / Zoom / 1Password / Dropbox は、Ubuntu の apt や snap ではなく
+各社の公式配布物を使う。配布形態がばらばらなので扱いも分かれる。
+
+| アプリ | 取得元 | バージョン | 理由 |
+| --- | --- | --- | --- |
+| Discord | 公式 API の deb | 固定しない | 「最新版」の URL しかなく、かつ古い版だと起動を拒む |
+| Zoom | 公式サイトの deb | 固定しない | 同上 |
+| Dropbox | 公式サイトの deb | **固定 + SHA256** | バージョン付き URL が公開されている |
+| 1Password | 公式 apt リポジトリ | 固定しない | セキュリティ更新を受け取るため |
+
+Discord と Zoom は「導入済みなら何もしない」方式にしている。
+毎回ダウンロードすると遅く、かつ最新版が変わるたびに再インストールが
+走って冪等性が崩れるため。更新はアプリ自身が行う。
+
+**4 つとも公式が amd64 版しか配布していない** (2026-08 時点で確認済み)。
+
+| アプリ | amd64 | arm64 の状況 |
+| --- | --- | --- |
+| Discord | あり | 配布なし (arch 指定を付けても amd64 の deb が返る) |
+| Zoom | あり | 配布なし (CDN の arm64 パスが 403) |
+| 1Password | あり | 配布なし (deb が 404) |
+| Dropbox | あり | 配布なし (公式の deb 置き場に amd64 しかない) |
+
+そのため `17-desktop-apps.sh` は arm64 では丸ごとスキップする。
+**検証 VM は arm64 なので、この 4 つの導入経路は VM では検証できない。**
+`harness/asserts/17-desktop-apps.sh` は arm64 では
+「導入されていないこと」と「余計なリポジトリを足していないこと」を確認し、
+amd64 では実際の導入結果を確認する。amd64 での確認は x86_64 実機で行う。
+
+### Docker は公式リポジトリ + docker グループ
+
+Ubuntu の `docker.io` ではなく Docker 公式の `docker-ce` を使う。
+公式リポジトリは amd64 / arm64 の両方を配布しているのでアーキ分岐は要らない。
+リポジトリの suite は `/etc/os-release` のコードネームから決め、
+Docker 側にまだ無ければエラーで止める (黙って古い suite を使わない)。
+
+`docker` グループを `/etc/adduser.conf` の `EXTRA_GROUPS` に登録して、
+sudo なしで docker を使えるようにしている。
+**docker グループはホストの root 権限と同等**であり、これは利便性を取った判断。
+README にもその旨を明記している。root 権限を渡したくない場合は
+rootless Docker への切り替えを検討する。
+
+### 既存ユーザーへのグループ付与は adduser.conf を単一の情報源にする
+
+新規ユーザーには `adduser` が `EXTRA_GROUPS` のグループを付けてくれるが、
+既存ユーザーには誰も付けない。かといって
+「input は 30-xremap、docker は 55-docker が既存ユーザーに付ける」と
+モジュールごとに書くと、追加のたびに書き漏らす。
+
+そこで各モジュールは `add_extra_group` で `/etc/adduser.conf` に登録するだけにし、
+`70-existing-users.sh` がその一覧 (`list_extra_groups`) を読んで
+既存ユーザーに付与する。グループが増えても 70 側の変更は要らない。
 
 ### 既定ブラウザの設定機構: `/etc/xdg/mimeapps.list` + update-alternatives
 
@@ -456,6 +522,10 @@ Ghostty の GPU 描画は **OpenGL 4.3 以上**を必要とする。VMware Fusio
 | xremap GNOME 拡張 | v15 | リポジトリに同梱 | SHA256 (`tests/static-checks.sh`) |
 | Vicinae | v0.25.0 | `modules/45-vicinae.sh` | SHA256 |
 | Vicinae GNOME 拡張 | v1.7.0 | リポジトリに同梱 | SHA256 |
+| Dropbox | 2026.05.06 | `modules/17-desktop-apps.sh` | SHA256 |
+| Discord / Zoom | 固定しない | — | 公式サイトの HTTPS |
+| 1Password | 固定しない | — | apt リポジトリ署名 (`Signed-By`) |
+| Docker | 固定しない | — | apt リポジトリ署名 (`Signed-By`) |
 | herdr | 0.8.0 | `modules/50-herdr.sh` | SHA256 |
 | Claude Code | 2.1.231 | `modules/60-agents.sh` | npm のバージョン指定 |
 | GitHub Copilot CLI | 1.0.79 | `modules/60-agents.sh` | npm のバージョン指定 |

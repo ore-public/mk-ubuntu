@@ -182,6 +182,50 @@ set_conf_key() {
 }
 
 # ---------------------------------------------------------------------------
+# ユーザーのグループ
+# ---------------------------------------------------------------------------
+
+# /etc/adduser.conf の EXTRA_GROUPS に指定グループを足す。
+# 既に設定されている値は消さずに残す。既に含まれていれば何もしない。
+# ここに登録したグループは、70-existing-users.sh が既存ユーザーにも付与する。
+add_extra_group() {
+  local group="$1" line current
+  line="$(grep -m1 '^EXTRA_GROUPS=' /etc/adduser.conf || true)"
+
+  if [ -z "$line" ]; then
+    set_conf_key /etc/adduser.conf EXTRA_GROUPS "\"${group}\""
+    set_conf_key /etc/adduser.conf ADD_EXTRA_GROUPS 1
+    return 0
+  fi
+
+  current="${line#EXTRA_GROUPS=}"
+  current="${current#\"}"
+  current="${current%\"}"
+
+  case " ${current} " in
+    *" ${group} "*)
+      log "変更なし: /etc/adduser.conf の EXTRA_GROUPS は既に ${group} を含みます"
+      ;;
+    *)
+      set_conf_key /etc/adduser.conf EXTRA_GROUPS "\"${current:+${current} }${group}\""
+      ;;
+  esac
+  set_conf_key /etc/adduser.conf ADD_EXTRA_GROUPS 1
+}
+
+# /etc/adduser.conf の EXTRA_GROUPS に並んでいるグループ名を 1 行ずつ出力する
+list_extra_groups() {
+  local line current
+  line="$(grep -m1 '^EXTRA_GROUPS=' /etc/adduser.conf 2>/dev/null || true)"
+  [ -n "$line" ] || return 0
+  current="${line#EXTRA_GROUPS=}"
+  current="${current#\"}"
+  current="${current%\"}"
+  # 空白区切りの並びを 1 行 1 グループに直す
+  printf '%s' "$current" | tr ' ' '\n' | grep -v '^$' || true
+}
+
+# ---------------------------------------------------------------------------
 # apt
 # ---------------------------------------------------------------------------
 

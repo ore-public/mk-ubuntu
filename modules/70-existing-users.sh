@@ -18,6 +18,10 @@
 # 管理ファイル側からは必ず対応する個人ファイルを読み込むようにしてあるので、
 # 上書きされても利用者の設定は失われない。
 #
+# あわせて、各モジュールが /etc/adduser.conf の EXTRA_GROUPS に登録した
+# グループ (input / docker など) を既存ユーザーにも付与する。
+# 新規ユーザーは adduser が付けてくれるが、既存ユーザーには誰も付けないため。
+#
 # ログインシェルの変更だけは行わず、chsh の案内にとどめる。
 #
 set -euo pipefail
@@ -126,14 +130,29 @@ seed_skel_into_home() {
   fi
 }
 
-add_to_input_group() {
-  local user="$1"
-  if id -nG "$user" | tr ' ' '\n' | grep -qx input; then
-    log "変更なし: ${user} は既に input グループに入っています"
-    return 0
+# /etc/adduser.conf の EXTRA_GROUPS に並んでいるグループを既存ユーザーに付与する。
+# 何をどのグループに入れるかは各モジュールが登録するので、ここは中身を知らない。
+add_registered_groups() {
+  local user="$1" group added=0
+  while IFS= read -r group; do
+    [ -n "$group" ] || continue
+    if ! getent group "$group" >/dev/null 2>&1; then
+      warn "グループ ${group} が存在しないため ${user} には付与しません。"
+      continue
+    fi
+    if id -nG "$user" | tr ' ' '\n' | grep -qx "$group"; then
+      continue
+    fi
+    usermod -aG "$group" "$user"
+    log "追加: ${user} を ${group} グループに入れました"
+    added=$((added + 1))
+  done < <(list_extra_groups)
+
+  if [ "$added" -eq 0 ]; then
+    log "変更なし: ${user} のグループ"
+  else
+    log "  グループの変更は再ログインで反映されます"
   fi
-  usermod -aG input "$user"
-  log "追加: ${user} を input グループに入れました (反映には再ログインが必要)"
 }
 
 main() {
@@ -145,7 +164,7 @@ main() {
   while IFS=$'\t' read -r user home shell; do
     log "対象ユーザー: ${user} (${home})"
     seed_skel_into_home "$user" "$home"
-    add_to_input_group "$user"
+    add_registered_groups "$user"
 
     case "$shell" in
       /bin/zsh | /usr/bin/zsh) ;;

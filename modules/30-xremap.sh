@@ -90,31 +90,6 @@ install_gnome_extension() {
   dconf_update
 }
 
-# /etc/adduser.conf の EXTRA_GROUPS に指定グループを足す。
-# 既に設定されている値は消さずに残す。既に含まれていれば何もしない。
-add_extra_group() {
-  local group="$1" line current
-  line="$(grep -m1 '^EXTRA_GROUPS=' /etc/adduser.conf || true)"
-
-  if [ -z "$line" ]; then
-    set_conf_key /etc/adduser.conf EXTRA_GROUPS "\"${group}\""
-    return 0
-  fi
-
-  current="${line#EXTRA_GROUPS=}"
-  current="${current#\"}"
-  current="${current%\"}"
-
-  case " ${current} " in
-    *" ${group} "*)
-      log "変更なし: /etc/adduser.conf の EXTRA_GROUPS は既に ${group} を含みます"
-      return 0
-      ;;
-  esac
-
-  set_conf_key /etc/adduser.conf EXTRA_GROUPS "\"${current:+${current} }${group}\""
-}
-
 setup_input_permissions() {
   # uinput デバイスを input グループから触れるようにする
   write_file "$UDEV_RULE" 0644 <<'EOF'
@@ -122,8 +97,8 @@ KERNEL=="uinput", GROUP="input", MODE="0660", OPTIONS+="static_node=uinput"
 EOF
 
   # 新規ユーザーを既定で input グループに入れる
+  # (既存ユーザーへの付与は 70-existing-users.sh が行う)
   add_extra_group input
-  set_conf_key /etc/adduser.conf ADD_EXTRA_GROUPS 1
 
   # ルール追加後に既存ノードへ反映する (VM / 実機どちらでも必要)
   if command -v udevadm >/dev/null 2>&1; then
@@ -131,13 +106,6 @@ EOF
     udevadm trigger --subsystem-match=misc --name-match=uinput >/dev/null 2>&1 || true
   fi
 
-  # 既存ユーザーには自動で group を足さない旨を案内する
-  local u uid
-  while IFS=: read -r u _ uid _ _ _ _; do
-    if [ "$uid" -ge 1000 ] && [ "$uid" -lt 60000 ] && ! id -nG "$u" | tr ' ' '\n' | grep -qx input; then
-      log "既存ユーザー ${u} を input グループに入れるには: sudo usermod -aG input ${u}"
-    fi
-  done </etc/passwd
 }
 
 install_systemd_unit() {

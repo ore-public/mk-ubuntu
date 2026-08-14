@@ -168,6 +168,18 @@ VM でも確認できるが、描画品質と打鍵感は実機の値と異な�
 - [ ] `~/.zshrc` を書き換えて `sudo ./install.sh` すると元に戻る
       (書き換えは消えるが `~/.zshrc.local` は残る)
 
+### アプリと Docker (amd64 実機で確認)
+
+- [ ] Discord が起動してログインできる
+- [ ] Zoom が起動する
+- [ ] 1Password が起動してロック解除できる
+- [ ] Dropbox が起動し、初回のセットアップ案内が出る
+- [ ] `docker run --rm hello-world` が sudo なしで通る (再ログイン後)
+- [ ] `docker compose version` が表示される
+
+> arm64 の検証 VM では Discord / Zoom / 1Password / Dropbox は
+> 導入されない。ハーネスは「導入されていないこと」までを確認する。
+
 ### 新規ユーザー
 
 - [ ] 「設定」→「システム」→「ユーザー」で新規ユーザーを作ると、

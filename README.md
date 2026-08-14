@@ -25,6 +25,8 @@ sudo ./install.sh
 | **ブラウザ** | Brave が既定に (Firefox も残ります) |
 | **プレビュー** | Files でスペースキーを押すとプレビュー (Quick Look 相当) |
 | **AI エージェント** | Claude Code / GitHub Copilot CLI / opencode / herdr |
+| **アプリ** | Discord / Zoom / 1Password / Dropbox (公式配布版) |
+| **コンテナ** | Docker Engine と Docker Compose (Docker 公式版) |
 
 ---
 
@@ -235,6 +237,10 @@ apt から入るもののほか、次を特定のバージョンで導入しま�
 | ソフトウェア | バージョン |
 | --- | --- |
 | Ghostty (ターミナル) | Ubuntu の 1.3.0 |
+| Docker Engine / Compose | 最新 (Docker 公式リポジトリ) |
+| 1Password | 最新 (1Password 公式リポジトリ) |
+| Discord / Zoom | 最新 (公式サイト。アプリが自身で更新します) |
+| Dropbox | 2026.05.06 |
 | Brave (ブラウザ) | 最新 (公式リポジトリ) |
 | Vicinae (ランチャー) | v0.25.0 |
 | xremap (キーリマップ) | v0.15.10 |
@@ -245,7 +251,17 @@ apt から入るもののほか、次を特定のバージョンで導入しま�
 | opencode | 1.18.18 |
 | Node.js | Ubuntu の 22 系 |
 
-ダウンロードするものはすべてチェックサムを検証しています。
+ダウンロードするものは、バージョンを固定できるものはチェックサムを検証し、
+「最新版」しか配布されていないものは公式サイトの HTTPS と
+apt リポジトリの署名を信頼の根拠にしています。
+
+> **Discord / Zoom / 1Password / Dropbox は、公式が amd64 版しか配布していません。**
+> arm64 (Apple Silicon の VM や ARM 機) では、この 4 つだけ導入がスキップされます。
+> 他の機能はすべて arm64 でも動きます。
+
+> **Docker を sudo なしで使えるようにするため、`docker` グループに追加します。**
+> このグループに入るとホストの root 権限と同等の操作ができる点にご留意ください。
+> 反映には再ログインが必要です。
 
 Playwright の Chromium は全ユーザー共有で `/opt/playwright-browsers` に置きます。
 ユーザーごとに重複してダウンロードされません。
@@ -267,6 +283,24 @@ systemctl --user status xremap.service
 
 ```bash
 systemctl --user status vicinae.service
+```
+
+**docker コマンドで permission denied が出る**
+
+`docker` グループの追加はログインし直すまで反映されません。
+一度ログアウトしてください。
+
+```bash
+id -nG | tr ' ' '\n' | grep docker   # 反映されていれば docker と出る
+```
+
+**Discord / Zoom / 1Password / Dropbox が入っていない**
+
+お使いのマシンが arm64 ではありませんか。
+この 4 つは公式が amd64 版しか配布していないため、arm64 では導入されません。
+
+```bash
+dpkg --print-architecture   # amd64 と出るか確認
 ```
 
 **ターミナルが zsh にならない**

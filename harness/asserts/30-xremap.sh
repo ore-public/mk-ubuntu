@@ -31,6 +31,8 @@ check_contains /etc/adduser.conf '^ADD_EXTRA_GROUPS=1$' \
   "/etc/adduser.conf の ADD_EXTRA_GROUPS が 1"
 check "EXTRA_GROUPS の行が 1 行だけ (追記の重複がない)" \
   bash -c "[ \"\$(grep -c '^EXTRA_GROUPS=' /etc/adduser.conf)\" -eq 1 ]"
+check "EXTRA_GROUPS に同じグループが重複していない" \
+  bash -c "line=\$(grep -m1 '^EXTRA_GROUPS=' /etc/adduser.conf); v=\${line#EXTRA_GROUPS=}; v=\${v//\\\"/}; [ \"\$(printf '%s' \"\$v\" | tr ' ' '\\n' | sort | uniq -d | wc -l)\" -eq 0 ]"
 check "/dev/uinput のグループが input である" \
   bash -c "[ \"\$(stat -c %G /dev/uinput 2>/dev/null)\" = input ]"
 
