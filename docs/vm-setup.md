@@ -156,3 +156,17 @@ $EDITOR harness/config.env
   ログイン画面でセッションを選ぶ必要はない。
 - `vmrun getGuestIPAddress -wait` が返らない場合は、ゲストで `open-vm-tools` が
   動いているか (`systemctl status open-vm-tools`) を確認する。
+- **`vmtest shot` にはゲストのログインパスワードが必要**。
+  `vmrun captureScreen` がゲストへのログインを要求するため、
+  `harness/config.env` の `GUEST_PASSWORD` を設定する。
+  未設定でも `vmtest full` はレベル 1 まで完走する。
+- **自動ログインの副作用でログインキーリングが解錠されない。**
+  そのため Brave などキーリングを使うアプリを起動すると
+  「Authentication required」のダイアログが画面を覆う。これは検証 VM が
+  自動ログインだから起きることで、パスワードを入力して通常どおりログインする
+  実機では起きない。`vmtest shots` は Brave を `--password-store=basic` で
+  起動してこれを避けている。
+- **画面ロック中は GNOME が拡張をアンロードする。** xremap の GNOME 拡張も
+  止まるため、放置してロックがかかった VM に対して `vmtest assert` を実行すると
+  アプリ別リマップの検証が落ちる。ハーネスは検証前にロックを解除し、
+  自動ロックを止める (`prepare_guest_session`)。

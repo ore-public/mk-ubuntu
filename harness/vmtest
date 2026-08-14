@@ -9,6 +9,7 @@
 #   ./harness/vmtest provision   ゲストで sudo ./install.sh を実行する
 #   ./harness/vmtest assert      harness/asserts/ を実行し TAP 形式で結果を出す
 #   ./harness/vmtest shot <名前> スクリーンショットを harness/shots/<名前>.png に保存する
+#   ./harness/vmtest shots       レベル 2 の撮影シーケンスを通しで実行する
 #   ./harness/vmtest e2e         実キー入力 E2E テスト (flaky 許容)
 #   ./harness/vmtest full        上記を通しで実行し、冪等性も確認する
 #   ./harness/vmtest ssh [cmd]   ゲストへ SSH する (デバッグ用)
@@ -305,6 +306,73 @@ cmd_shot() {
 }
 
 # ---------------------------------------------------------------------------
+# shots (レベル 2 の撮影シーケンス)
+# ---------------------------------------------------------------------------
+
+# ゲスト側でコマンドをグラフィカルセッションの中で動かす。
+# transient unit にすることで、あとから確実に止められる。
+guest_gui_run() {
+  local unit="$1"
+  shift
+  guest_run "export XDG_RUNTIME_DIR=/run/user/\$(id -u);
+             export DBUS_SESSION_BUS_ADDRESS=unix:path=\$XDG_RUNTIME_DIR/bus;
+             systemctl --user reset-failed ${unit}.service 2>/dev/null;
+             systemd-run --user --unit=${unit} --collect $* >/dev/null 2>&1" || true
+}
+
+guest_gui_stop() {
+  local unit="$1"
+  guest_run "export XDG_RUNTIME_DIR=/run/user/\$(id -u);
+             systemctl --user stop ${unit}.service" >/dev/null 2>&1 || true
+}
+
+# ゲストへキーを注入する (ydotool)
+guest_key() {
+  guest_run "export YDOTOOL_SOCKET=/tmp/.ydotool_socket;
+             sudo -n test -S \$YDOTOOL_SOCKET ||
+               sudo -n sh -c \"nohup ydotoold --socket-path=\$YDOTOOL_SOCKET --socket-own=\$(id -u):\$(id -g) >/tmp/ydotoold.log 2>&1 &\";
+             sleep 2; ydotool key $*" >/dev/null 2>&1 || true
+}
+
+# レベル 2 の視覚判定用に、決まった順序で画面を撮る。
+# 人間 (または Claude) が画像を見て合否を判断する。
+cmd_shots() {
+  if [ -z "$GUEST_PASSWORD" ]; then
+    log "config.env の GUEST_PASSWORD が未設定のため、レベル 2 の撮影を飛ばします。"
+    return 1
+  fi
+
+  prepare_guest_session
+
+  log "レベル 2: 初回ウィザードの画面を撮ります"
+  cmd_shot "01-wizard" || true
+
+  log "レベル 2: Ghostty を起動してワークスペース 1 への自動配置を撮ります"
+  guest_gui_run "shot-ghostty" "ghostty"
+  sleep 12
+  cmd_shot "02-ghostty-workspace1" || true
+
+  # Brave の起動時にログインキーリングの入力を求められると画面を覆ってしまう。
+  # 検証 VM は自動ログインのためキーリングが解錠されていないので、
+  # キーリングを使わない設定で起動する (ゲスト側のテスト事情であり、
+  # 通常のログインでは起きない)。
+  log "レベル 2: Brave を起動してワークスペース 2 への自動配置を撮ります"
+  guest_gui_run "shot-brave" "brave-browser --password-store=basic --no-first-run"
+  sleep 20
+  cmd_shot "03-brave-workspace2" || true
+
+  log "レベル 2: F12 で Vicinae が開くところを撮ります"
+  guest_key "88:1 88:0"
+  sleep 5
+  cmd_shot "04-vicinae" || true
+
+  guest_gui_stop "shot-ghostty"
+  guest_gui_stop "shot-brave"
+
+  log "撮影した画像: ${SHOT_DIR}"
+}
+
+# ---------------------------------------------------------------------------
 # e2e
 # ---------------------------------------------------------------------------
 
@@ -384,7 +452,7 @@ cmd_full() {
 
   # レベル 2 (スクリーンショット) は人が見て判断するものなので、
   # 撮れなくても全体の終了コードには含めない。
-  cmd_shot "desktop-after-provision" || log "WARNING: スクリーンショットを取得できませんでした。"
+  cmd_shots || log "WARNING: レベル 2 の撮影を行えませんでした。"
   cmd_e2e
 
   log "vmtest full が完了しました (レベル 1 は全通過)。"
@@ -428,6 +496,7 @@ main() {
     provision) cmd_provision "$@" ;;
     assert) cmd_assert "$@" ;;
     shot) cmd_shot "$@" ;;
+    shots) cmd_shots "$@" ;;
     e2e) cmd_e2e "$@" ;;
     full) cmd_full "$@" ;;
     ssh) cmd_ssh "$@" ;;
