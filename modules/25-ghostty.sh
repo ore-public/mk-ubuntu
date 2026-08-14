@@ -10,7 +10,7 @@
 # xdg-terminals.list 系のファイルを読んで決める。
 # また gnome-settings-daemon 50 の media-keys スキーマから terminal キーが
 # なくなっているため、Ctrl+Alt+T はカスタムキーバインドとして登録する。
-# 詳しくは README の「設計判断」節を参照。
+# 詳しくは docs/development.md の「設計判断」節を参照。
 #
 # Ptyxis はアンインストールしない (公式構成からの逸脱を最小化するため)。
 #

@@ -25,7 +25,7 @@ PACKAGES_REQUIRED=(
 )
 
 # 後続モジュールと「実現する体験」のために追加するパッケージ。
-# 追加理由は README の「設計判断」節に記載。
+# 追加理由は docs/development.md の「設計判断」節に記載。
 PACKAGES_EXTRA=(
   ripgrep           # zimfw の fzf モジュールがファイル列挙に必要とする
   unzip             # xremap / GNOME 拡張の zip 展開

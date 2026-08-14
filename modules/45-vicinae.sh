@@ -30,7 +30,7 @@ CACHE_DIR="/var/cache/mk-ubuntu"
 SYSTEMD_USER_UNIT="/etc/systemd/user/vicinae.service"
 SYSTEMD_USER_WANTS="/etc/systemd/user/default.target.wants/vicinae.service"
 
-# 呼び出しキー。変更方法は README の「設計判断」節を参照。
+# 呼び出しキー。変更方法は README の「自分好みに設定を変える」を参照。
 VICINAE_HOTKEY="F12"
 
 # クリップボード履歴とウィンドウ管理の API を Vicinae に渡す GNOME 拡張。

@@ -1,635 +1,317 @@
 # mk-ubuntu
 
-素の **Ubuntu 26.04 LTS (Resolute Raccoon) Desktop** を、1 コマンドで
-「インストール直後から Mac っぽく操作でき、AI エージェント開発環境が整っている状態」
-にするプロビジョニングリポジトリ。
-
-自作ディストリビューションの第一段階にあたる。ここで作った成果物は、
-後段の autoinstall ISO や Cubic リマスターにそのままペイロードとして載せる。
-**ISO のビルドはこのリポジトリのスコープ外。**
+素の **Ubuntu 26.04 LTS Desktop** を 1 コマンドで
+「Mac っぽく操作でき、AI エージェント開発環境が整った状態」にします。
 
 ```bash
 git clone <このリポジトリ> && cd mk-ubuntu
 sudo ./install.sh
 ```
 
-何度実行しても安全 (冪等)。2 回目は差分なしで正常終了する。
+実行後に再起動すれば、そのまま使い始められます。
+何度実行しても安全です (2 回目以降は変更がなければ何も起きません)。
 
 ---
 
-## ターゲット
+## 何が変わるか
 
-| 項目 | 値 |
+| | |
 | --- | --- |
-| OS | Ubuntu 26.04 LTS Desktop のみ |
-| デスクトップ | GNOME 50 / **Wayland セッションのみ** (26.04 に X.org セッションはない) |
-| アーキテクチャ | amd64 / arm64 の両対応 |
-| シェル | zsh (+ zimfw) |
-| ターミナル | Ghostty (Ptyxis も残す) |
-| ブラウザ | Brave (既定)。Firefox も残す |
-
-開発マシンは Apple Silicon Mac (M3)。動作検証は VMware Fusion 上の
-**arm64 版 Ubuntu 26.04** で行う。x86_64 固有の確認は後日実機で行う。
-
-新規ユーザーを作ると全設定が自動で継承される (`/etc/skel` + システム既定値で構成)。
+| **キー操作** | CapsLock が Ctrl に。Alt+C / Alt+V などが Mac の Command 相当に |
+| **ランチャー** | **F12** で Vicinae (Spotlight / Alfred 相当)。クリップボード履歴つき |
+| **ワークスペース** | 10 個固定。Ctrl+1 〜 Ctrl+0 で移動 |
+| **ターミナル** | Ghostty が既定に。Ctrl+Alt+T で開く |
+| **シェル** | zsh + zimfw。Ctrl+R で履歴検索、Ctrl+T でファイル検索 |
+| **ブラウザ** | Brave が既定に (Firefox も残ります) |
+| **プレビュー** | Files でスペースキーを押すとプレビュー (Quick Look 相当) |
+| **AI エージェント** | Claude Code / GitHub Copilot CLI / opencode / herdr |
 
 ---
 
-## リポジトリ構成
+## 動作環境
 
-```
-install.sh              エントリポイント。sudo で実行し、全モジュールを順に適用する
-lib/common.sh           全モジュール共通のヘルパー (ログ / 冪等な配置 / apt / dconf)
-modules/                機能単位のスクリプト。番号プレフィックスで実行順を制御する
-  10-packages.sh          apt の基礎パッケージ
-  15-brave.sh             Brave の導入と既定ブラウザ化
-  20-zsh-zimfw.sh         zsh + zimfw
-  25-ghostty.sh           Ghostty の設定と既定ターミナル化
-  30-xremap.sh            Mac 風キー操作
-  40-gnome-workspaces.sh  ワークスペースと Auto Move Windows
-  42-gnome-desktop.sh     スクリーンショットとトラックパッドの Mac 化
-  45-vicinae.sh           ランチャー Vicinae
-  50-herdr.sh             herdr
-  60-agents.sh            Node.js と AI エージェント各種、初回ウィザード
-  65-agent-tooling.sh     Playwright MCP、共有ブラウザ、herdr 操作スキル
-  70-existing-users.sh    既存ユーザーへの設定配布と input グループ追加
-files/                  配置する設定ファイルの原本
-  skel/                   /etc/skel に置くもの
-  systemd/                /etc/systemd/user に置くもの
-  gnome-extensions/       同梱する GNOME 拡張の zip
-  claude-skills/          /etc/skel/.claude/skills/ に置く Claude Code スキル
-bin/first-run-wizard    初回ログイン時のエージェント認証ウィザード
-harness/                VMware Fusion 検証ハーネス (Mac 側で実行)
-  vmtest                  vmrun ラッパー CLI
-  asserts/                ゲスト内で実行する状態アサーション (レベル 1)
-  e2e/                    実キー入力 E2E テスト (レベル 3、flaky 許容)
-tests/                  静的検証と冪等性テスト
-docs/                   VM の構築手順とハーネスの使い方
-```
+| 項目 | 対応 |
+| --- | --- |
+| OS | **Ubuntu 26.04 LTS Desktop のみ** |
+| デスクトップ | GNOME (Wayland セッション) |
+| アーキテクチャ | amd64 / arm64 の両方 |
 
-### モジュールの単体実行
+他のバージョンの Ubuntu では動作を確認していません。実行すると警告が出ます。
 
-```bash
-sudo ./install.sh 30-xremap.sh   # モジュール名で指定
-sudo ./install.sh 30             # 番号だけでも指定できる
-sudo ./install.sh --list         # 一覧を表示
-sudo bash modules/30-xremap.sh   # 直接実行もできる
-```
+> このリポジトリが行うのは「既にある Ubuntu のセットアップ」までです。
+> インストール ISO の作成は含みません。
 
 ---
 
-## 使い方
+## セットアップ手順
 
-### 1. プロビジョニング
+### 1. 実行する
 
 ```bash
 sudo ./install.sh
 ```
 
-完了したら再起動する。dconf のシステム既定値・GNOME 拡張・systemd ユーザーサービスは
-再ログインで反映される。
+10 〜 20 分ほどかかります (ブラウザやエージェントをダウンロードするため)。
+ディスクは 3 GB ほど使います。内訳の大きいものは次のとおりです。
 
-### 設定ファイルの持ち方 (重要)
-
-このリポジトリが配る設定ファイルは **2 種類**に分かれる。
-
-| 種類 | 例 | 挙動 |
-| --- | --- | --- |
-| **管理ファイル** | `~/.zshrc` `~/.zimrc` `~/.config/ghostty/config` `~/.config/xremap/config.yml` | **`install.sh` のたびに上書きされる** |
-| **個人ファイル** | `~/.zshrc.local` `~/.zimrc.local` `~/.config/ghostty/config.local` `~/.config/xremap/config.local.yml` | **一度作られたら二度と触られない** |
-
-**自分の設定は必ず個人ファイル (`*.local`) の側に書く。**
-管理ファイルを直接編集しても、次に `install.sh` を実行した時点で消える。
-
-こうしている理由は、**このリポジトリを更新して運用中の PC で再実行したときに、
-変更が確実に行き渡るようにするため**。管理ファイルを「既にあるものは触らない」に
-すると、一度セットアップした PC には更新が永久に届かなくなる。
-
-管理ファイルからは必ず対応する個人ファイルを読み込むようにしてあるので、
-上書きされても個人の設定は失われない。読み込みは管理ファイルの最後に行うため、
-個人ファイル側の値が優先される。
-
-| 個人ファイル | 読み込まれ方 |
+| 用途 | サイズ |
 | --- | --- |
-| `~/.zshrc.local` | `~/.zshrc` の末尾で `source` |
-| `~/.zimrc.local` | `~/.zimrc` の末尾で `source` (`zmodule` をそのまま書ける) |
-| `~/.config/ghostty/config.local` | `config` の `config-file = ?config.local` |
-| `~/.config/xremap/config.local.yml` | systemd から xremap に 2 つ目の設定として渡す |
+| Playwright の Chromium (全ユーザー共有) | 約 1.0 GB |
+| AI エージェント各種 (npm) | 約 1.3 GB |
+| Brave | 約 440 MB |
+| Vicinae | 約 230 MB |
 
-xremap の個人設定を変えたら `systemctl --user restart xremap.service` で反映する。
+### 2. 再起動する
 
-> **既にある自分のアカウントで zsh を使うには `chsh` が要る。**
-> `install.sh` は既存ユーザーのログインシェルを勝手に変えない
-> (意図せずシェルが変わるのを避けるため)。zsh + zimfw の体験を得るには
-> 自分で切り替えて、いったんログアウトする。
->
-> ```bash
-> chsh -s /bin/zsh
-> ```
->
-> 設定ファイル (`.zshrc` / `.zimrc` など) は `70-existing-users.sh` が
-> 既に配っているので、シェルを切り替えるだけでよい。
-> 新しく作るユーザーは最初から zsh になる。
+キーリマップ・ワークスペース設定・ランチャーは、
+**ログインし直さないと反映されません。**
 
-### 2. 初回ログイン
+### 3. 初回ログイン時のウィザードに答える
 
-初回ログイン時に `first-run-wizard` が Ghostty で自動起動し、次を対話的に案内する。
+再起動後の最初のログインで、セットアップウィザードが自動で開きます。
+次の順に案内するので、使うものだけ設定してください。
 
-1. Claude Code のログイン (`claude auth login`)
-2. GitHub 認証 (`gh auth login`) と Copilot CLI のセットアップ
-3. opencode の認証設定
-4. `herdr integration install claude`
-5. Playwright MCP のユーザースコープ登録と herdr-reviewr の導入
+1. Claude Code のログイン
+2. GitHub のログインと Copilot CLI のセットアップ
+3. opencode の認証
+4. herdr と Claude Code の連携
+5. Claude Code からブラウザを操作するための設定 (Playwright)
 
-各ステップは `s` でスキップ、`q` で中断できる。完了すると
-`~/.config/mk-ubuntu/wizard-done` が作られ、以後は自動起動しない。
-やり直すときは `first-run-wizard --force`。
+- 使わないものは **`s`** でスキップできます
+- 途中でやめたいときは **`q`**。あとで続きからやり直せます
+- やり直したいときは、ターミナルで `first-run-wizard --force`
+- 一度完了すると、次のログインからは自動で開きません
 
-**API キーや認証情報はリポジトリに一切含めず、焼き込みもしない。**
-認証は各エージェント自身のログインコマンドが行う。
+> **パスワードや API キーはこのリポジトリに一切含まれていません。**
+> 認証はすべて各ツール自身のログイン画面で行われます。
 
-### 3. 検証
+### 4. zsh に切り替える (既にあるアカウントを使っている場合)
+
+`install.sh` は、今あるアカウントのログインシェルを勝手に変えません。
+zsh を使うには自分で切り替えて、ログアウトしてください。
 
 ```bash
-./tests/lint.sh            # bash -n + shellcheck
-./tests/static-checks.sh   # リポジトリ構造とパスの静的検証
-./harness/vmtest full      # VM 実機検証 (詳細は docs/vm-testing.md)
+chsh -s /bin/zsh
 ```
+
+設定ファイルはすでに配置済みなので、切り替えるだけで使えます。
+**このあと新しく作るユーザーは、最初から zsh になります。**
 
 ---
 
-## 実現する体験
+## 自分好みに設定を変える
 
-### Mac 風のキー操作
+### 大原則: 自分の設定は `.local` の付いたファイルに書く
 
-- CapsLock が Ctrl になる
-- Alt+C / Alt+V / Alt+X / Alt+Z / Alt+A / Alt+S / Alt+F / Alt+T / Alt+W が
-  Mac の Command 相当として働く
-- Ctrl+P / Ctrl+N / Ctrl+B / Ctrl+F でカーソル移動、Ctrl+A / Ctrl+E で行頭・行末、
-  Ctrl+H / Ctrl+D で削除、Ctrl+K で行末まで削除
-- Alt+Q でウィンドウを閉じる (Cmd+Q 相当)
-- Alt+Shift+3 で画面全体、Alt+Shift+4 / Alt+Shift+5 で撮影パネル
-- トラックパッドはタップでクリック、2 本指で右クリック、ナチュラルスクロール
-- **ターミナル (Ghostty / Ptyxis) はこのグローバルリマップから除外している。**
-  ターミナル内の Alt+C / Alt+V は Ghostty のネイティブ keybind が担当する。
-  こうしないと Ctrl+C の中断が壊れる。
+このリポジトリが配る設定ファイルは 2 種類あります。
 
-### ワークスペース
+| | ファイル | 扱い |
+| --- | --- | --- |
+| **触らないファイル** | `~/.zshrc`<br>`~/.zimrc`<br>`~/.config/ghostty/config`<br>`~/.config/xremap/config.yml` | `install.sh` を実行するたびに**上書きされます** |
+| **自分用のファイル** | `~/.zshrc.local`<br>`~/.zimrc.local`<br>`~/.config/ghostty/config.local`<br>`~/.config/xremap/config.local.yml` | **一度作られたら二度と書き換えられません** |
 
-- 固定 10 ワークスペース
-- Ctrl+1 〜 Ctrl+0 で移動、Ctrl+Shift+1 〜 Ctrl+Shift+0 でウィンドウを移動
-- Ghostty はワークスペース 1、Brave はワークスペース 2 に自動配置
+**自分の設定は必ず `.local` の付いたファイルに書いてください。**
+上の段のファイルを直接編集しても、次回の `install.sh` で消えます。
 
-割当を変えるには `/etc/dconf/db/local.d/40-workspaces` の `application-list` を編集し、
-`sudo dconf update` を実行する。書式は `'<desktop ファイル名>:<ワークスペース番号>'`。
+こうなっているのは、**このリポジトリが更新されたときに、
+使用中の PC で `install.sh` を実行し直すだけで最新の設定が反映されるようにするため**です。
+
+`.local` ファイルは自動的に読み込まれ、しかも**あとから読まれる**ので、
+元の設定を上書きできます。
+
+```bash
+# 例: エイリアスを足す
+echo 'alias ll="ls -la"' >> ~/.zshrc.local
+
+# 例: ターミナルのフォントを大きくする
+echo 'font-size = 15' >> ~/.config/ghostty/config.local
+
+# 例: キーリマップを足す (反映するには下のコマンドが必要)
+$EDITOR ~/.config/xremap/config.local.yml
+systemctl --user restart xremap.service
+```
+
+### 更新を取り込む
+
+```bash
+git pull
+sudo ./install.sh
+```
+
+`.local` ファイルに書いた設定はそのまま残ります。
+
+### ランチャーの呼び出しキーを変える
+
+初期設定は **F12** です。
+
+- **自分だけ変える**: 「設定 → キーボード → キーボードショートカット →
+  カスタムショートカット」に **Vicinae** があるので、そこで変更
+- **全ユーザーで変える**: `/etc/dconf/db/local.d/35-custom-keybindings` の
+  Vicinae の `binding=` を書き換えて `sudo dconf update`
+
+> F12 はブラウザの開発者ツールのキーでもあります。
+> Vicinae に割り当てている間は、開発者ツールは Ctrl+Shift+I で開いてください。
+> 気になる場合は上の方法でキーを変えられます。
+
+### アプリごとの起動ワークスペースを変える
+
+初期設定では Ghostty がワークスペース 1、Brave がワークスペース 2 に開きます。
+
+- **自分だけ変える**: 「拡張機能」アプリの **Auto Move Windows** の設定から変更
+- **全ユーザーで変える**: `/etc/dconf/db/local.d/40-workspaces` の
+  `application-list` を編集して `sudo dconf update`
 
 ```
 application-list=['com.mitchellh.ghostty.desktop:1', 'brave-browser.desktop:2', 'code.desktop:3']
 ```
 
-ユーザー単位で変えたい場合は「拡張機能」アプリの Auto Move Windows の設定から変更できる
-(ユーザーの設定がシステム既定値より優先される)。
+書式は `'<desktop ファイル名>:<ワークスペース番号>'` です。
+
+---
+
+## 使い方
+
+### キー操作 (Mac 風)
+
+| キー | 動作 |
+| --- | --- |
+| CapsLock | Ctrl として働く |
+| Alt+C / Alt+V / Alt+X | コピー / ペースト / カット |
+| Alt+Z / Alt+A / Alt+S | 元に戻す / 全選択 / 保存 |
+| Alt+F / Alt+T / Alt+W | 検索 / 新規タブ / タブを閉じる |
+| Alt+Q | ウィンドウを閉じる |
+| Ctrl+P / Ctrl+N / Ctrl+B / Ctrl+F | カーソルを上 / 下 / 左 / 右へ |
+| Ctrl+A / Ctrl+E | 行頭 / 行末へ |
+| Ctrl+H / Ctrl+D / Ctrl+K | 前を削除 / 後ろを削除 / 行末まで削除 |
+| Alt+Shift+3 | 画面全体のスクリーンショット |
+| Alt+Shift+4 / Alt+Shift+5 | スクリーンショットのパネルを開く |
+| Ctrl+1 〜 Ctrl+0 | ワークスペース 1 〜 10 へ移動 |
+| Ctrl+Shift+1 〜 Ctrl+Shift+0 | ウィンドウをワークスペースへ移動 |
+| Ctrl+Alt+T | ターミナル (Ghostty) を開く |
+| F12 | ランチャー (Vicinae) を開く |
+
+**ターミナルの中だけは Alt+C / Alt+V の扱いが別です。**
+ターミナル内では Ghostty 自身の機能でコピー / ペーストになります。
+これは Ctrl+C の「中断」を壊さないための意図的な仕様です。
+
+トラックパッドは、タップでクリック・2 本指のタップで右クリック・
+ナチュラルスクロールになります。
 
 ### ランチャー (Vicinae)
 
-**F12** で Vicinae が開く。アプリ起動、ファイル検索、計算、
-**クリップボード履歴**などを 1 か所から行える
-(macOS の Spotlight / Alfred 相当)。
+**F12** で開きます。アプリの起動、ファイル検索、計算、
+**クリップボード履歴**などが 1 か所からできます。
 
-呼び出しキーの変更方法:
-
-- **システム既定 (全ユーザー)**: `/etc/dconf/db/local.d/35-custom-keybindings` の
-  Vicinae の `binding=` を書き換えて `sudo dconf update`
-- **ユーザー個別**: 「設定 → キーボード → キーボードショートカット →
-  カスタムショートカット」に **Vicinae** として出るので、そこで変更する
-  (ユーザーの設定がシステム既定より優先される)
-
-> F12 は Brave / Firefox の開発者ツールの既定キーでもある。
-> Vicinae に割り当てている間はブラウザ側に F12 が届かないので、
-> 開発者ツールは Ctrl+Shift+I を使うか、上記の方法でキーを変更する。
-
-Vicinae は `vicinae.service` (systemd ユーザーサービス) として常駐する。
-
-クリップボード履歴は Vicinae 単体では動かず、GNOME 拡張
-`vicinae@dagimg-dot` が必要になる (Wayland ではクリップボードの監視に
-Shell 側の協力が要るため)。この拡張も同梱して有効化している。
-
-### Quick Look
-
-Files (Nautilus) でファイルを選んでスペースキーを押すとプレビューが出る
-(macOS の Quick Look 相当)。`gnome-sushi` パッケージが提供する。
+クリップボード履歴は「Clipboard History」から見られます。
+コピーした内容が自動で記録されていきます。
 
 ### シェル
 
-- 新規ユーザーの既定シェルは zsh
-- Ctrl+R でコマンド履歴のあいまい検索
-- Ctrl+T でファイル一覧 + プレビュー
-- 入力補完 (グレー表示のサジェスト) とシンタックスハイライト
-- `bat` が使える (Ubuntu の実体は `batcat`)
+- **Ctrl+R** — コマンド履歴をあいまい検索
+- **Ctrl+T** — ファイルを検索 (右側にプレビューが出ます)
+- 入力中にグレーで候補が出ます (右矢印キーで確定)
+- コマンドの色分け表示
+- `bat` でファイルを色付き表示できます
 
 ### AI エージェント
 
-`claude` / `copilot` / `opencode` / `herdr` がシステムワイドに入っている。
-Claude Code からは Playwright MCP でブラウザを操作でき、
-`herdr-ops` スキルで herdr を操作できる。
+ターミナルから次のコマンドが使えます。
+
+| コマンド | 内容 |
+| --- | --- |
+| `claude` | Claude Code |
+| `copilot` | GitHub Copilot CLI |
+| `opencode` | opencode |
+| `herdr` | エージェント向けターミナル多重化ツール |
+
+Claude Code からは、ブラウザ操作 (Playwright) と herdr の操作ができます。
 
 ---
 
-## 設計判断
-
-参考情報が古い環境を前提にしている場合でも、**Ubuntu 26.04 の実環境を正**とする。
-
-### Ubuntu 26.04 固有の前提
-
-| 項目 | 26.04 での状況 | 本リポジトリの対応 |
-| --- | --- | --- |
-| `sudo` | 既定実装が **sudo-rs** | sudo.ws 固有オプションを使わない。`sudo -n` / `sudoers.d` の基本機能のみ |
-| coreutils | **rust-coreutils** (`cp`/`mv`/`rm` は GNU のまま) | GNU 固有の非互換フラグを避け、POSIX 準拠の書き方を優先 |
-| APT | 3 系。`apt-key` は削除済み | 外部リポジトリは keyring 方式 (`/etc/apt/keyrings/` + `Signed-By`) のみ。deb822 形式で記述 |
-| GNOME | 50。Wayland セッションのみ | xremap の GNOME 拡張が必須。X.org 前提の手順は使わない |
-| Ghostty | universe に 1.3.0 | `apt install ghostty` で導入。ソースビルドしない |
-
-### 外部 apt リポジトリは Brave のみ
-
-原則として外部 apt リポジトリは追加しない。**Brave (`15-brave.sh`) だけを例外**とする。
-Brave は個別バージョンの固定 URL を公開しておらず、リポジトリのローリング配信だけを提供している。
-そのため Brave はバージョン固定せず、**リポジトリ署名 (`Signed-By`) を信頼の根拠**とする。
-他の外部バイナリはすべてバージョン固定 + SHA256 検証を行う。
-
-### 既定ブラウザの設定機構: `/etc/xdg/mimeapps.list` + update-alternatives
-
-`xdg-settings set default-web-browser` はユーザー単位にしか効かない。
-システム既定にするには、`XDG_CONFIG_DIRS` 上の `/etc/xdg/mimeapps.list` に
-`[Default Applications]` を書くのが XDG 仕様どおりの方法で、
-ユーザーが `~/.config/mimeapps.list` で後から上書きできる点も都合がよい。
-加えて Debian 系ツール向けに `update-alternatives` の `x-www-browser` /
-`gnome-www-browser` も Brave に向ける。
-
-`/usr/share/applications/defaults.list` は非推奨なので使わない。
-
-### 既定ターミナルの設定機構: `/etc/xdg/*xdg-terminals.list` + カスタムキーバインド
-
-- Ubuntu 25.04 以降、既定ターミナルは **`xdg-terminal-exec`** が決める。
-  参照するファイルは `XDG_CURRENT_DESKTOP` の各要素に対応する
-  `<desktop>-xdg-terminals.list` と、最後に `xdg-terminals.list`。
-  Ubuntu の `XDG_CURRENT_DESKTOP` は `ubuntu:GNOME` なので、
-  `/etc/xdg/` に `ubuntu-xdg-terminals.list` / `gnome-xdg-terminals.list` /
-  `xdg-terminals.list` の 3 つを置いて確実に効かせる。
-  ユーザーは `~/.config/` 側の同名ファイルで上書きできる。
-- **Ctrl+Alt+T はカスタムキーバインドとして登録する。**
-  GNOME 50 の `gnome-settings-daemon` の media-keys スキーマからは
-  `terminal` キーが削除されており、従来の
-  `org.gnome.settings-daemon.plugins.media-keys terminal` は使えない。
-  そのため `custom-keybindings/custom0` に
-  `binding='<Primary><Alt>t'` / `command='xdg-terminal-exec'` を登録する。
-  コマンドを `ghostty` 直書きではなく `xdg-terminal-exec` にすることで、
-  既定ターミナルの定義箇所を `xdg-terminals.list` の 1 か所に集約している。
-- Ptyxis はアンインストールしない (公式構成からの逸脱を最小化するため)。
-
-### zimfw: 本体はシステム共有、モジュールは skel に事前配置、init.zsh だけ初回生成
-
-3 つの案を比較した。
-
-1. **skel に完全に構築済みの `.zim` を置く** — `init.zsh` は生成時のパスを埋め込むため、
-   `/etc/skel` で生成すると各ユーザーのホームで壊れる。不採用。
-2. **初回ログイン時に全部インストールする** — 上流が推奨する方式だが、
-   初回ログイン時にネットワークが必要になる。オフライン設置や
-   ISO 化後の初回起動を考えると不利。
-3. **採用: モジュールの実体だけを skel に事前配置し、`init.zsh` は初回起動時に生成**
-
-`zimfw.zsh` 本体は `/usr/local/share/zimfw/zimfw.zsh` に 1 つだけ置く
-(更新箇所が 1 か所で済む)。モジュールは `20-zsh-zimfw.sh` が
-`/etc/skel/.zim/modules/` に git clone しておく。各ユーザーの初回シェル起動時、
-`.zshrc` のブートストラップが `init.zsh` だけを生成する。
-モジュールが揃っているのでネットワークは不要。
-
-`init.zsh` と `.zwc` は skel から明示的に削除している。
-
-### `bat` の系統リンク
-
-Ubuntu の `bat` パッケージはコマンド名を `batcat` にする。
-要件どおり `.zshrc` に `alias bat="batcat"` を入れているが、
-alias はシェル関数なので `bat` という**コマンド名を探すツール**からは見えない。
-zimfw の fzf モジュールは Ctrl+T のプレビューに `bat` を使うため、
-`/usr/local/bin/bat -> /usr/bin/batcat` の系統リンクも置いている。
-
-同じ理由で、要件の F1 に加えて **ripgrep** を導入している
-(zimfw の fzf モジュールはファイル列挙に bfs / fd / ripgrep / ugrep のいずれかを要求する)。
-
-### xremap の GNOME 拡張はリポジトリに同梱する
-
-26.04 は Wayland 専用で、拡張がないとアプリケーション別のリマップが機能しない
-(= `application:` の指定が全く効かず、ターミナルの除外も効かない)。必須部品なので、
-インストール時のネットワーク状況に左右されないよう
-extensions.gnome.org の配布物 (v15、GNOME 45〜50 対応) をリポジトリに同梱している。
-チェックサムは `tests/static-checks.sh` が検証する。
-
-### `enabled-extensions` は 1 ファイルで管理する
-
-`org.gnome.shell enabled-extensions` は 1 つのキーに全 UUID を並べる形式なので、
-複数モジュールが `/etc/dconf/db/local.d/` に別々に書くとお互いを上書きしてしまう。
-また、dconf のシステム既定値を書くと Ubuntu が gschema override で入れている
-既定の拡張 (Dock など) も消えてしまう。
-
-そのため `lib/common.sh` の `dconf_enable_extension` が、
-実行時の `gsettings get` の値と追加したい UUID の**和集合**を取り、
-`/etc/dconf/db/local.d/30-extensions` の 1 ファイルだけに書き込む。
-和集合をソートして書くので、何度実行しても結果は同じ。
-
-### 管理ファイルは毎回上書きし、個人設定は別ファイルに分ける
-
-当初は既存ユーザーへの配布を「まだ無いファイルだけコピーする」方式にしていたが、
-**それだと一度セットアップした PC にこのリポジトリの更新が二度と届かない**。
-`.zshrc` を改善しても、既に `.zshrc` を持っている PC では無視されてしまう。
-
-そこで配布物を管理ファイルと個人ファイルに分けた。
-
-- **管理ファイル**: 毎回そのまま上書きする。更新が確実に行き渡る。
-- **個人ファイル** (`*.local`): 無いときだけ作り、以後は触らない。
-
-管理ファイルからは必ず対応する個人ファイルを読み込む。読み込みは末尾で行うので、
-個人ファイル側の値が優先される。どの読み込み方も実機で確認した:
-
-- `~/.zshrc` → `source ~/.zshrc.local`
-- `~/.zimrc` → `source ~/.zimrc.local` (`zmodule` がそのまま使える)
-- `~/.config/ghostty/config` → `config-file = ?config.local`
-  (`?` は「ファイルが無くてもエラーにしない」。`?` を付けないと
-  Ghostty が起動のたびに Configuration Errors ダイアログを出す)
-- `~/.config/xremap/config.yml` → systemd から `xremap-session` ラッパー経由で
-  2 つ目の設定ファイルとして渡す。xremap は 2 つ目以降の `modmap` / `keymap` を
-  1 つ目にマージする。存在しないファイルを渡すとエラーになるため、
-  ラッパーが実在するものだけを並べる
-
-`~/.zim/modules` は git clone した実体であって設定ではないので、
-上書き対象からは外し、不足分を補うだけにしている。
-
-`harness/asserts/72-managed-files.sh` が、実際にホームのファイルを書き換えてから
-再実行し、管理ファイルが元に戻ること・個人ファイルが残ることを確認する。
-
-### /etc/skel は既存ユーザーには届かないので、別モジュールで配る
-
-`/etc/skel` が効くのは「これから作られるユーザー」だけで、
-**install.sh を実行した本人には何も届かない**。実機検証で、xremap の systemd
-ユニットが `ConditionPathExists=%h/.config/xremap/config.yml` を満たせず
-起動すらしていないことで判明した。
-
-そのため `70-existing-users.sh` が、既存ユーザー (UID 1000-59999) に対して
-`/etc/skel` の内容のうち**まだ存在しないファイルだけ**を配る
-(`cp -r --update=none`)。対象ユーザー自身として実行するので所有者は自動的に正しくなり、
-既存の設定を壊さない。あわせて `input` グループにも追加する
-(xremap が入力デバイスを読むのに必要)。
-
-ログインシェルの変更だけは自動で行わず `chsh` の案内にとどめている。
-利用者が意図せずシェルを変えられるのを避けるため。
-
-なお、autoinstall ISO や Cubic で使う場合は、利用者アカウントが
-インストーラによって後から作られるため `/etc/skel` だけで足りる。
-このモジュールは「既に使っている Ubuntu に後から適用する」場合のためのもの。
-
-### Alt+Q は Ctrl+Q ではなく Alt+F4 に変換する
-
-GNOME には「アプリ全体を終了する」統一アクションがない。
-
-- `Ctrl+Q` は GTK / GNOME アプリでは「アプリ終了」だが、
-  Brave などの Chrome 系は `Ctrl+Q` を割り当てていないため無反応になる。
-- `Alt+F4` は GNOME の `close` アクションを発火するので**全アプリで確実に効く**。
-
-Mac の Cmd+Q の「必ず閉じる」体験を優先し、xremap で `Alt-q: Alt-F4` に変換する。
-複数ウィンドウを開いているアプリでは手前の 1 窓だけが閉じる点が
-macOS とは異なる。ターミナルは除外対象なので効かない。
-
-### スクリーンショットは 4 と 5 が同じ動作になる
-
-macOS の Cmd+Shift+4 は範囲選択、Cmd+Shift+5 は撮影パネルだが、
-GNOME には「範囲選択を即開始する」専用アクションがなく、範囲選択も
-撮影パネル (`show-screenshot-ui`) の中で行う。そのため
-Alt+Shift+4 と Alt+Shift+5 は同じ `show-screenshot-ui` を指す。
-Print キーの既定割当は消さずに残している。
-
-### トラックパッド設定は Ubuntu の既定と同じ値
-
-`tap-to-click=true` と `click-method='fingers'` は Ubuntu 26.04 の既定値と
-同じだった (実機で確認済み)。それでも dconf に明示しているのは、
-上流の既定が変わってもこのディストロの挙動を固定するため。
-`tap-and-drag` と `natural-scroll` もあわせて明示している。
-
-### Vicinae は AppImage を展開して置く
-
-Vicinae は amd64 / arm64 とも AppImage でしか配布されていない
-(x86_64 のみ tar.gz もあるが、両アーキで同じ手順にするため AppImage を使う)。
-AppImage をそのまま実行すると FUSE が必要になるので、
-`--appimage-extract` で中身を取り出して `/opt/vicinae` に置き、
-`/usr/local/bin/vicinae` からラッパーで呼ぶ。FUSE 不要で起動も速い。
-
-`AppRun` は自分の位置から `APPDIR` を決めるため、シンボリックリンクではなく
-ラッパースクリプトで呼んでいる。
-
-AppImage は `libOpenGL.so.0` を同梱していないので、`libopengl0` を
-apt で入れている (これがないとサーバーが起動時に落ちる)。
-
-### カスタムキーバインドも 1 ファイルで管理する
-
-`custom-keybindings` は `enabled-extensions` と同じく 1 つのキーに配列を並べる形式で、
-モジュールごとに `/etc/dconf/db/local.d/` へ書くとお互いを消してしまう。
-
-そこで `/var/lib/mk-ubuntu/custom-keybindings/` を登録簿とし、
-`lib/common.sh` の `dconf_set_custom_keybinding` が呼ばれるたびに
-`/etc/dconf/db/local.d/35-custom-keybindings` を作り直す。
-`customN` の番号は登録 ID の辞書順で決まるので、何度実行しても同じ結果になる。
-
-現在の登録: `terminal` (Ctrl+Alt+T) と `vicinae` (F12)。
-
-### 画面ロック中は xremap のアプリ別リマップが止まる
-
-GNOME は画面ロック中に拡張をアンロードする。xremap の GNOME 拡張も
-止まるため、`application:` 条件を使う `keymap` (Alt+C などの Mac 風バインド) は
-ロック中は適用されない。`modmap` の CapsLock → Ctrl はロック中も効く。
-ロック解除で拡張は自動的に読み込み直され、元に戻る。
-
-GNOME の仕様であって本リポジトリの不具合ではないが、
-検証時にこれを踏むと assert が時間依存で落ちるため、
-ハーネスは検証前にロックを解除して自動ロックを止める。
-
-### xremap の systemd ユニット
-
-- パスに `/home/<user>` を書かず `%h` を使う
-- **`--watch=device` を付ける。** xremap は既定では起動時に存在した入力デバイスしか
-  掴まない。これがないと、ログイン後に挿した USB / Bluetooth キーボードで
-  リマップがまったく効かない (VM 検証で、後から作られた仮想デバイスの
-  キー入力が 1 件も変換されないことで判明した)
-- `After=graphical-session.target` + `ExecStartPre=/usr/bin/sleep 5` で
-  GNOME Shell と拡張の起動を待つ
-- `Restart=always`
-- `/etc/systemd/user/default.target.wants/xremap.service` へのシンボリックリンクで
-  システム全体を有効化する (各ユーザーが `systemctl --user enable` しなくてよい)
-
-### Node.js は apt (universe) を使う
-
-Ubuntu 26.04 の universe に `nodejs 22.22.x` がある。Claude Code の要求は
-Node.js 22 以上なので、これで足りる。**NodeSource は使わない**
-(外部 apt リポジトリの追加を避けるという方針と一致する)。
-`60-agents.sh` は導入後にメジャーバージョンを確認し、22 未満なら停止する。
-
-### opencode は Go 製ではなく Bun 製のバイナリ
-
-要件では「Go 製」としていたが、現在の opencode (`anomalyco/opencode`) は
-Bun でコンパイルされた単一バイナリを GitHub Releases で配布している。
-`opencode-linux-x64.tar.gz` / `opencode-linux-arm64.tar.gz` を
-バージョン固定 + SHA256 検証で取得し、`/usr/local/bin/opencode` に置く。
-
-x86_64 では baseline 版ではない通常版を使っている。
-古い CPU で起動しない場合は `opencode-linux-x64-baseline.tar.gz` に差し替える。
-
-### Playwright: ブラウザはシステム共有パスに事前配置
-
-`PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers` を
-`/etc/environment` (PAM 経由でグラフィカルセッションに効く) と
-`/etc/profile.d/mk-ubuntu-playwright.sh` (ログインシェル用) の両方で設定する。
-
-**ディスクサイズへの影響**: arm64 の実測で **982 MB**。
-`playwright install chromium` は Chromium 本体だけでなく
-Chrome Headless Shell と ffmpeg も入れるため、この容量になる。
-ユーザーごとに `~/.cache/ms-playwright` へ落とすと人数分かかるところを 1 回で済ませる。
-`playwright install --with-deps chromium` は依存ライブラリの apt 導入も行う。
-
-ブラウザの導入には、グローバル導入した `@playwright/mcp` に同梱されている
-playwright CLI を使う。こうすると MCP 本体と**同じバージョン**の
-Chromium が入り、バージョン不一致で起動しない事故を避けられる。
-
-### Playwright MCP の登録は first-run-wizard から行う
-
-Claude Code のユーザースコープ設定は `~/.claude.json` にランタイム生成されるため、
-`/etc/skel` への静的配置では効かない。したがって
-`claude mcp add --scope user` をウィザードから実行する。
-
-登録先は、グローバル導入済みの `playwright-mcp` バイナリを優先する
-(実行時にネットワークを必要としないため)。見つからない場合のみ
-`npx @playwright/mcp@<固定バージョン>` にフォールバックする。
-どちらの場合もバージョンは固定し、`@latest` は使わない。
-
-### herdr 操作スキルは公式のものを採用する
-
-要件では独自に `SKILL.md` を書くとしていたが、**herdr 公式が同等のスキルを提供している**
-ことが分かったため、そちらを採用する。
-
-- herdr は v0.8.0 で `herdr --skill` を追加しており、
-  **実行中のバイナリに同梱されたスキルを出力する**。
-- `65-agent-tooling.sh` はこの出力から `/etc/skel/.claude/skills/herdr-ops/SKILL.md` を生成する。
-  これにより「スキルの記述内容」と「`50-herdr.sh` で固定した herdr のバージョン」が
-  構造的に必ず一致する (手で同期する必要がない)。
-- バイナリから取れない場合に備えて、同じ v0.8.0 の
-  `skills/herdr/SKILL.md` を `files/claude-skills/herdr-ops/SKILL.md` に同梱してある。
-
-Claude Code はスキル名をディレクトリ名から決めるため、
-配置先ディレクトリ名 (`herdr-ops`) が名前になるよう、
-生成時に frontmatter の `name:` 行だけを取り除いている。本文は公式のまま。
-
-### herdr-reviewr のバージョン固定
-
-`herdr plugin install persiyanov/herdr-reviewr --ref v0.30.4` のように
-`--ref` でリビジョンを固定する。過去に glibc のバージョン不整合で
-バイナリが起動しない問題があったため (現在は musl ビルドで解消)、
-ウィザードは導入後に `herdr plugin action list herdr-reviewr` で起動確認を行い、
-失敗した場合はログの確認方法を案内する。
-
-### arm64 対応状況
-
-本リポジトリで扱う外部バイナリはすべて arm64 版が提供されている。
-**ソースビルドや x86 実機検証送りにした項目はない。**
-
-| 対象 | amd64 | arm64 | 取得元 |
-| --- | --- | --- | --- |
-| xremap 0.15.10 | `xremap-linux-x86_64-gnome.zip` | `xremap-linux-aarch64-gnome.zip` | GitHub Releases |
-| herdr 0.8.0 | `herdr-linux-x86_64` | `herdr-linux-aarch64` | GitHub Releases |
-| opencode 1.18.18 | `opencode-linux-x64.tar.gz` | `opencode-linux-arm64.tar.gz` | GitHub Releases |
-| Brave | apt (amd64) | apt (arm64) | Brave 公式リポジトリ (分岐不要) |
-| Playwright Chromium | あり | あり | `playwright install` がアーキを判別 |
-| herdr-reviewr 0.30.4 | あり | あり | `herdr plugin install` が判別 |
-
-`lib/common.sh` の `pick_arch` が `dpkg --print-architecture` の結果で分岐する。
-`harness/asserts/05-arch.sh` が、配置されたバイナリの ELF マシン種別が
-実行環境と一致していることを検証する。
-
-### keymap はフォーカス中のウィンドウがないと適用されない
-
-`keymap` の `application:` 条件は、フォーカス中のウィンドウの WM_CLASS を
-GNOME 拡張から取得して評価する。フォーカス中のウィンドウが 1 つもないと
-WM_CLASS が取れず、`not:` を書いていても keymap は適用されない。
-`modmap` (CapsLock → Ctrl) はフォーカスに依存せず常に効く。
-
-そのため `harness/e2e/10-key-remap.sh` は、keymap の確認の前に
-非ターミナルのウィンドウ (gnome-text-editor など) を開いてフォーカスを作る。
-
-### VM 検証での描画性能について
-
-Ghostty の GPU 描画は **OpenGL 4.3 以上**を必要とする。VMware Fusion のゲストでは
-ソフトウェアレンダリングにフォールバックするため、
-**VM 上で観測した描画性能は参考値**であり実機の値ではない。
-描画品質の確認は `docs/vm-testing.md` の手動チェックリストに回している。
+## 導入されるもの
+
+apt から入るもののほか、次を特定のバージョンで導入します。
+
+| ソフトウェア | バージョン |
+| --- | --- |
+| Ghostty (ターミナル) | Ubuntu の 1.3.0 |
+| Brave (ブラウザ) | 最新 (公式リポジトリ) |
+| Vicinae (ランチャー) | v0.25.0 |
+| xremap (キーリマップ) | v0.15.10 |
+| zimfw (zsh の設定フレームワーク) | v1.20.0 |
+| herdr | 0.8.0 |
+| Claude Code | 2.1.231 |
+| GitHub Copilot CLI | 1.0.79 |
+| opencode | 1.18.18 |
+| Node.js | Ubuntu の 22 系 |
+
+ダウンロードするものはすべてチェックサムを検証しています。
+
+Playwright の Chromium は全ユーザー共有で `/opt/playwright-browsers` に置きます。
+ユーザーごとに重複してダウンロードされません。
 
 ---
 
-## バージョン固定の一覧
+## 困ったとき
 
-外部から取得するものはすべて各モジュール冒頭の変数で固定している。
+**キーリマップが効かない**
 
-| 対象 | バージョン | 固定箇所 | 検証 |
-| --- | --- | --- | --- |
-| zimfw | v1.20.0 | `modules/20-zsh-zimfw.sh` | SHA256 |
-| xremap | v0.15.10 | `modules/30-xremap.sh` | SHA256 |
-| xremap GNOME 拡張 | v15 | リポジトリに同梱 | SHA256 (`tests/static-checks.sh`) |
-| herdr | 0.8.0 | `modules/50-herdr.sh` | SHA256 |
-| Claude Code | 2.1.231 | `modules/60-agents.sh` | npm のバージョン指定 |
-| GitHub Copilot CLI | 1.0.79 | `modules/60-agents.sh` | npm のバージョン指定 |
-| opencode | 1.18.18 | `modules/60-agents.sh` | SHA256 |
-| Playwright MCP | 0.0.79 | `modules/65-agent-tooling.sh` | npm のバージョン指定 |
-| herdr-reviewr | v0.30.4 | `bin/first-run-wizard` | `--ref` によるリビジョン固定 |
-| Brave | 固定しない | — | apt リポジトリ署名 (`Signed-By`) |
+再起動 (またはログアウトとログイン) をしましたか。
+それでも効かない場合:
 
----
-
-## 開発の進め方
-
-```
-モジュール実装
-  → ./tests/lint.sh          (bash -n + shellcheck を警告ゼロで通す)
-  → ./tests/static-checks.sh (リポジトリ構造の静的検証)
-  → ./harness/vmtest full    (クリーン VM で通し検証)
-  → 失敗のトリアージ (assert ログ / スクリーンショットの読解)
-  → リポジトリ修正 → 再実行
+```bash
+systemctl --user status xremap.service
 ```
 
-**コミットの条件**: shellcheck が警告ゼロで通ること、かつ
-`vmtest full` のレベル 1 (状態アサーション) が全通過していること。
+**F12 を押してもランチャーが出ない**
 
-ハーネスの詳細は [docs/vm-testing.md](docs/vm-testing.md)、
-VM の初期構築は [docs/vm-setup.md](docs/vm-setup.md) を参照。
+```bash
+systemctl --user status vicinae.service
+```
 
-### 冪等性の考え方
+**ターミナルが zsh にならない**
 
-- ファイル配置は `install_file` / `write_file` を使う (内容が同じなら書かない)
-- 設定ファイルの書き換えは `set_conf_key` を使う (追記ではなく置換なので行が増えない)
-- apt は未導入のものだけを対象にする
-- 外部バイナリはバージョンを確認し、一致していればダウンロードしない
-- `dconf` は生成ファイルの内容が同じなら差分が出ない
+`chsh -s /bin/zsh` を実行してログアウトしてください
+(既にあるアカウントのシェルは自動では変わりません)。
 
-冪等性は `tests/state-manifest.sh` が出す状態スナップショットの差分で判定する。
-`vmtest full` は `install.sh` を 2 回実行して、この出力に差分がないことを確認する。
+**設定を変えたのに戻ってしまう**
+
+`.local` の付かないファイルを編集していませんか。
+上の「[自分好みに設定を変える](#自分好みに設定を変える)」を参照してください。
+
+**セットアップウィザードをもう一度実行したい**
+
+```bash
+first-run-wizard --force
+```
+
+**一部だけやり直したい**
+
+```bash
+sudo ./install.sh --list        # 何があるか見る
+sudo ./install.sh 45-vicinae.sh # 指定したものだけ実行
+```
 
 ---
 
-## ライセンス
+## ライセンスの注意
 
-このリポジトリのスクリプトと設定ファイルについては、リポジトリのライセンス表記に従う。
+このリポジトリのスクリプトと設定ファイルは、リポジトリのライセンス表記に従います。
 
-導入する第三者ソフトウェアのライセンスには注意が必要。特に:
+導入される第三者ソフトウェアには個別のライセンスがあります。特に:
 
-- **herdr は AGPL-3.0 / 商用のデュアルライセンス。**
-  本リポジトリの成果物 (プロビジョニング済みイメージや ISO) を外部配布する場合は、
-  条件確認が必要。
-- xremap は MIT、xremap の GNOME 拡張は GPLv2+。
-- Brave、Claude Code、GitHub Copilot CLI はそれぞれの利用規約に従う。
-- `files/gnome-extensions/` に同梱している zip は extensions.gnome.org の配布物
-  (xremap GNOME Shell 拡張、GPLv2+)。
-- `files/claude-skills/herdr-ops/SKILL.md` は herdr v0.8.0 の
-  `skills/herdr/SKILL.md` の写し。
+- **herdr は AGPL-3.0 / 商用のデュアルライセンス**です。
+  セットアップ済みのイメージや ISO を**外部に配布する場合は条件の確認が必要**です。
+- Brave、Claude Code、GitHub Copilot CLI は、それぞれの利用規約に従ってください。
+- xremap は MIT、同梱している GNOME 拡張は GPLv2+ です。
+
+---
+
+## 開発者の方へ
+
+このリポジトリの構成・設計判断・検証方法は
+[docs/development.md](docs/development.md) にまとめてあります。
+
+- [docs/development.md](docs/development.md) — 構成、設計判断、開発の進め方
+- [docs/vm-setup.md](docs/vm-setup.md) — 検証用 VM の作り方
+- [docs/vm-testing.md](docs/vm-testing.md) — 検証ハーネスの使い方と手動チェックリスト

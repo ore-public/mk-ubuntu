@@ -21,7 +21,7 @@ BRAVE_DESKTOP="brave-browser.desktop"
 
 # Brave は自動更新のためリポジトリのローリング配信のみを提供しており、
 # 個別バージョンの固定 URL を公開していない。したがってここではバージョン固定せず、
-# apt のリポジトリ署名 (signed-by) を信頼の根拠とする。README の設計判断を参照。
+# apt のリポジトリ署名 (signed-by) を信頼の根拠とする。docs/development.md の設計判断を参照。
 
 setup_repository() {
   install -d -m 0755 /etc/apt/keyrings
@@ -62,7 +62,7 @@ EOF
 
 # 既定ブラウザをシステムレベルで設定する。
 # 採用機構: /etc/xdg/mimeapps.list (XDG_CONFIG_DIRS 上のシステム既定) +
-# Debian の update-alternatives。README の設計判断を参照。
+# Debian の update-alternatives。docs/development.md の設計判断を参照。
 set_default_browser() {
   write_file /etc/xdg/mimeapps.list 0644 <<EOF
 [Default Applications]

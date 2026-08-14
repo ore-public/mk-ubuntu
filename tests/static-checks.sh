@@ -22,7 +22,7 @@ check_exists() {
 printf '=== 必須ファイルの実在 ===\n'
 for p in install.sh README.md lib/common.sh bin/first-run-wizard \
   harness/vmtest harness/config.env.example \
-  docs/vm-setup.md docs/vm-testing.md \
+  docs/development.md docs/vm-setup.md docs/vm-testing.md \
   files/skel/.zshrc files/skel/.zimrc \
   files/skel/.config/ghostty/config \
   files/skel/.config/xremap/config.yml \
