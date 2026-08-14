@@ -82,6 +82,11 @@ main() {
 
   [ "${#selected[@]}" -gt 0 ] || die "適用するモジュールがありません。"
 
+  # 起動直後は unattended-upgrades が動いていることが多い。
+  # 先に終わるのを待たないと、途中の apt が "Could not get lock" で失敗する。
+  log "パッケージ管理のロックが空くのを待ちます"
+  wait_for_apt_lock
+
   log "対象アーキテクチャ: $(deb_arch)"
   log "適用モジュール数: ${#selected[@]}"
 

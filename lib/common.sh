@@ -187,10 +187,22 @@ set_conf_key() {
 
 APT_UPDATED=0
 
+# 起動直後は unattended-upgrades が dpkg のロックを握っていることが多い。
+# APT 自身にロック待ちをさせる (待たないと "Could not get lock" で即失敗する)。
+APT_OPTS=(-o "DPkg::Lock::Timeout=600")
+
+# 他のパッケージ処理が終わるまで待つ。
+# apt-get check はロックを取るので、ロック待ちの実装をそのまま利用できる。
+wait_for_apt_lock() {
+  if ! apt-get "${APT_OPTS[@]}" check -qq >/dev/null 2>&1; then
+    warn "パッケージ管理のロック待ちに失敗しました。処理を続行します。"
+  fi
+}
+
 apt_update_once() {
   if [ "$APT_UPDATED" -eq 0 ]; then
     log "apt update を実行します"
-    apt-get update -qq
+    apt-get "${APT_OPTS[@]}" update -qq
     APT_UPDATED=1
   fi
 }
@@ -212,7 +224,7 @@ apt_install() {
 
   apt_update_once
   log "apt install: ${missing[*]}"
-  apt-get install -y -qq --no-install-recommends "${missing[@]}"
+  apt-get "${APT_OPTS[@]}" install -y -qq --no-install-recommends "${missing[@]}"
 }
 
 # ---------------------------------------------------------------------------

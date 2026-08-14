@@ -81,6 +81,8 @@ install_browsers() {
     log "変更なし: ${PLAYWRIGHT_BROWSERS_DIR} に Chromium が配置済み"
   else
     log "Chromium と依存ライブラリを ${PLAYWRIGHT_BROWSERS_DIR} に導入します"
+    # playwright install --with-deps は内部で apt を呼ぶので、先にロックを空ける
+    wait_for_apt_lock
     PLAYWRIGHT_BROWSERS_PATH="$PLAYWRIGHT_BROWSERS_DIR" \
       "$pw_cli" install --with-deps chromium ||
       die "playwright install --with-deps chromium に失敗しました。"
