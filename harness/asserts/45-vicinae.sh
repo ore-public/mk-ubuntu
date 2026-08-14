@@ -76,9 +76,18 @@ export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 if systemctl --user is-active vicinae.service >/dev/null 2>&1; then
   pass "vicinae.service が active である"
   check "vicinae ping が通る" /usr/local/bin/vicinae ping
-  # 拡張が読み込まれていれば、サーバーは「拡張が無い」と言わなくなる
-  if journalctl --user -u vicinae.service -n 200 --no-pager 2>/dev/null |
-    grep -q "extension not installed or not running"; then
+  # クリップボード履歴が使える状態か。
+  # 拡張が読めていれば「listening for clipboard changes」まで進む。
+  # 拡張が無いと「extension not installed or not running」で止まる。
+  VICINAE_LOG="$(journalctl --user -u vicinae.service -n 300 --no-pager 2>/dev/null)"
+  if printf '%s' "$VICINAE_LOG" | grep -q "listening for clipboard changes"; then
+    pass "Vicinae のクリップボード監視が動いている"
+  else
+    fail "Vicinae のクリップボード監視が動いている"
+    printf '%s' "$VICINAE_LOG" | grep -iE "clipboard|extension" | tail -n 6 |
+      while IFS= read -r l; do diag "$l"; done
+  fi
+  if printf '%s' "$VICINAE_LOG" | grep -q "extension not installed or not running"; then
     fail "Vicinae サーバーがクリップボード拡張を認識している"
     diag "GNOME Shell の再ログイン後に拡張が読み込まれたか確認してください。"
   else

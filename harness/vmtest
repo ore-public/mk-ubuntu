@@ -225,6 +225,9 @@ cmd_provision() {
 # 検証対象の設定には触れない)。
 prepare_guest_session() {
   guest_sudo "loginctl unlock-sessions" >/dev/null 2>&1 || true
+  # 溜まったクラッシュ報告があると apport のダイアログが画面を覆い、
+  # レベル 2 の視覚判定を邪魔する
+  guest_sudo "rm -f /var/crash/*.crash" >/dev/null 2>&1 || true
   guest_run "gsettings set org.gnome.desktop.screensaver lock-enabled false;
              gsettings set org.gnome.desktop.session idle-delay 0" >/dev/null 2>&1 || true
 }
