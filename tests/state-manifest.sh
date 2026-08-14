@@ -54,10 +54,18 @@ for p in \
   /usr/local/bin/herdr \
   /usr/local/bin/opencode \
   /usr/local/bin/first-run-wizard \
+  /usr/local/bin/vicinae \
+  /etc/systemd/user/vicinae.service \
+  /etc/systemd/user/default.target.wants/vicinae.service \
+  /opt/vicinae/.installed-version \
   /usr/local/bin/bat \
   /usr/local/share/zimfw/zimfw.zsh; do
   hash_path "$p"
 done
+
+echo
+echo "=== カスタムキーバインドの登録簿 ==="
+hash_tree /var/lib/mk-ubuntu/custom-keybindings
 
 echo
 echo "=== dconf のシステム既定値 ==="

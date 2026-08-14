@@ -28,6 +28,10 @@ keymap:
       Alt-f: Ctrl-f
       Alt-t: Ctrl-t
       Alt-w: Ctrl-w
+      # Cmd+Q 相当。GNOME には「アプリ全体を終了」の統一アクションがないため、
+      # 全アプリで確実に効く Alt-F4 (GNOME の close) に変換する。
+      # 複数ウィンドウを開いているアプリでは手前の 1 窓だけが閉じる。
+      Alt-q: Alt-F4
       # Emacs 風のカーソル移動
       Ctrl-p: Up
       Ctrl-n: Down

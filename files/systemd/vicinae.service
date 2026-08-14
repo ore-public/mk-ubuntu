@@ -1,0 +1,14 @@
+[Unit]
+Description=Vicinae launcher server
+Documentation=https://vicinae.com/docs
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/vicinae server
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target

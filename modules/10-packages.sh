@@ -34,6 +34,8 @@ PACKAGES_EXTRA=(
   xdg-terminal-exec # 既定ターミナルの決定機構 (25-ghostty.sh で使用)
   xdg-utils         # xdg-settings / xdg-mime
   jq                # 検証スクリプトと first-run-wizard での JSON 読み取り
+  gnome-sushi       # Nautilus でスペースキーのプレビュー (macOS の Quick Look 相当)
+  libopengl0        # Vicinae (45-vicinae.sh) が libOpenGL.so.0 を要求する
 )
 
 main() {

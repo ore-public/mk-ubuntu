@@ -237,6 +237,68 @@ dconf_update() {
   dconf update
 }
 
+# GNOME のカスタムキーバインドも enabled-extensions と同じ事情がある。
+# custom-keybindings は 1 つのキーにパスの配列を並べる形式なので、
+# モジュールごとに別ファイルへ書くとお互いを上書きしてしまう。
+# そこで「登録簿」を 1 か所に持ち、そこから dconf ファイルを毎回作り直す。
+DCONF_CUSTOM_KEYBINDINGS_FILE="${DCONF_DB_DIR}/35-custom-keybindings"
+CUSTOM_KEYBINDING_STATE_DIR="/var/lib/mk-ubuntu/custom-keybindings"
+CUSTOM_KEYBINDING_BASE_PATH="/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings"
+
+# 登録簿から dconf のシステム既定値ファイルを作り直す。
+# 割り当てる customN の番号は ID の辞書順で決まるので、何度実行しても同じ結果になる。
+regenerate_custom_keybindings() {
+  local ids=() id index=0 paths=""
+
+  while IFS= read -r id; do
+    [ -n "$id" ] && ids+=("$id")
+  done < <(find "$CUSTOM_KEYBINDING_STATE_DIR" -maxdepth 1 -type f -printf '%f\n' 2>/dev/null | sort)
+
+  if [ "${#ids[@]}" -eq 0 ]; then
+    return 0
+  fi
+
+  for index in $(seq 0 $((${#ids[@]} - 1))); do
+    [ -n "$paths" ] && paths="${paths}, "
+    paths="${paths}'${CUSTOM_KEYBINDING_BASE_PATH}/custom${index}/'"
+  done
+
+  {
+    printf '%s\n' \
+      '# Mac 風の操作のために追加したカスタムキーバインド。' \
+      '# custom-keybindings は 1 キーに全パスを並べる形式なので、' \
+      '# 全モジュール分をこのファイルにまとめて生成している。' \
+      '[org/gnome/settings-daemon/plugins/media-keys]' \
+      "custom-keybindings=[${paths}]"
+
+    index=0
+    for id in "${ids[@]}"; do
+      {
+        read -r kb_name
+        read -r kb_command
+        read -r kb_binding
+      } <"${CUSTOM_KEYBINDING_STATE_DIR}/${id}"
+      printf '\n[org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom%d]\n' "$index"
+      printf "name='%s'\ncommand='%s'\nbinding='%s'\n" "$kb_name" "$kb_command" "$kb_binding"
+      index=$((index + 1))
+    done
+  } | write_file "$DCONF_CUSTOM_KEYBINDINGS_FILE" 0644
+}
+
+# dconf_set_custom_keybinding <ID> <表示名> <コマンド> <キー>
+# ID は登録簿のファイル名になる。同じ ID で呼び直せば内容が置き換わる。
+dconf_set_custom_keybinding() {
+  local id="$1" name="$2" command="$3" binding="$4"
+  ensure_dconf_profile
+  install -d "$CUSTOM_KEYBINDING_STATE_DIR"
+  write_file "${CUSTOM_KEYBINDING_STATE_DIR}/${id}" 0644 <<EOF
+${name}
+${command}
+${binding}
+EOF
+  regenerate_custom_keybindings
+}
+
 # GNOME Shell の enabled-extensions は 1 つのキーに全 UUID を並べる形式なので、
 # 複数のモジュールが個別に書くとお互いを上書きしてしまう。
 # そのため、このキーだけは専用ファイル 1 つで管理し、和集合を取って書き換える。

@@ -47,6 +47,8 @@ modules/                機能単位のスクリプト。番号プレフィッ�
   25-ghostty.sh           Ghostty の設定と既定ターミナル化
   30-xremap.sh            Mac 風キー操作
   40-gnome-workspaces.sh  ワークスペースと Auto Move Windows
+  42-gnome-desktop.sh     スクリーンショットとトラックパッドの Mac 化
+  45-vicinae.sh           ランチャー Vicinae
   50-herdr.sh             herdr
   60-agents.sh            Node.js と AI エージェント各種、初回ウィザード
   65-agent-tooling.sh     Playwright MCP、共有ブラウザ、herdr 操作スキル
@@ -123,6 +125,9 @@ sudo ./install.sh
   Mac の Command 相当として働く
 - Ctrl+P / Ctrl+N / Ctrl+B / Ctrl+F でカーソル移動、Ctrl+A / Ctrl+E で行頭・行末、
   Ctrl+H / Ctrl+D で削除、Ctrl+K で行末まで削除
+- Alt+Q でウィンドウを閉じる (Cmd+Q 相当)
+- Alt+Shift+3 で画面全体、Alt+Shift+4 / Alt+Shift+5 で撮影パネル
+- トラックパッドはタップでクリック、2 本指で右クリック、ナチュラルスクロール
 - **ターミナル (Ghostty / Ptyxis) はこのグローバルリマップから除外している。**
   ターミナル内の Alt+C / Alt+V は Ghostty のネイティブ keybind が担当する。
   こうしないと Ctrl+C の中断が壊れる。
@@ -142,6 +147,32 @@ application-list=['com.mitchellh.ghostty.desktop:1', 'brave-browser.desktop:2', 
 
 ユーザー単位で変えたい場合は「拡張機能」アプリの Auto Move Windows の設定から変更できる
 (ユーザーの設定がシステム既定値より優先される)。
+
+### ランチャー (Vicinae)
+
+**F12** で Vicinae が開く。アプリ起動、ファイル検索、計算などを 1 か所から行える
+(macOS の Spotlight / Alfred 相当)。
+
+呼び出しキーの変更方法:
+
+- **システム既定 (全ユーザー)**: `/etc/dconf/db/local.d/35-custom-keybindings` の
+  Vicinae の `binding=` を書き換えて `sudo dconf update`
+- **ユーザー個別**: 「設定 → キーボード → キーボードショートカット →
+  カスタムショートカット」に **Vicinae** として出るので、そこで変更する
+  (ユーザーの設定がシステム既定より優先される)
+
+> F12 は Brave / Firefox の開発者ツールの既定キーでもある。
+> Vicinae に割り当てている間はブラウザ側に F12 が届かないので、
+> 開発者ツールは Ctrl+Shift+I を使うか、上記の方法でキーを変更する。
+
+Vicinae は `vicinae.service` (systemd ユーザーサービス) として常駐する。
+クリップボード履歴を使いたい場合は Vicinae 用の GNOME 拡張
+(`vicinae@dagimg-dot`) が別途必要になる。本リポジトリでは導入していない。
+
+### Quick Look
+
+Files (Nautilus) でファイルを選んでスペースキーを押すとプレビューが出る
+(macOS の Quick Look 相当)。`gnome-sushi` パッケージが提供する。
 
 ### シェル
 
@@ -279,6 +310,70 @@ extensions.gnome.org の配布物 (v15、GNOME 45〜50 対応) をリポジト�
 なお、autoinstall ISO や Cubic で使う場合は、利用者アカウントが
 インストーラによって後から作られるため `/etc/skel` だけで足りる。
 このモジュールは「既に使っている Ubuntu に後から適用する」場合のためのもの。
+
+### Alt+Q は Ctrl+Q ではなく Alt+F4 に変換する
+
+GNOME には「アプリ全体を終了する」統一アクションがない。
+
+- `Ctrl+Q` は GTK / GNOME アプリでは「アプリ終了」だが、
+  Brave などの Chrome 系は `Ctrl+Q` を割り当てていないため無反応になる。
+- `Alt+F4` は GNOME の `close` アクションを発火するので**全アプリで確実に効く**。
+
+Mac の Cmd+Q の「必ず閉じる」体験を優先し、xremap で `Alt-q: Alt-F4` に変換する。
+複数ウィンドウを開いているアプリでは手前の 1 窓だけが閉じる点が
+macOS とは異なる。ターミナルは除外対象なので効かない。
+
+### スクリーンショットは 4 と 5 が同じ動作になる
+
+macOS の Cmd+Shift+4 は範囲選択、Cmd+Shift+5 は撮影パネルだが、
+GNOME には「範囲選択を即開始する」専用アクションがなく、範囲選択も
+撮影パネル (`show-screenshot-ui`) の中で行う。そのため
+Alt+Shift+4 と Alt+Shift+5 は同じ `show-screenshot-ui` を指す。
+Print キーの既定割当は消さずに残している。
+
+### トラックパッド設定は Ubuntu の既定と同じ値
+
+`tap-to-click=true` と `click-method='fingers'` は Ubuntu 26.04 の既定値と
+同じだった (実機で確認済み)。それでも dconf に明示しているのは、
+上流の既定が変わってもこのディストロの挙動を固定するため。
+`tap-and-drag` と `natural-scroll` もあわせて明示している。
+
+### Vicinae は AppImage を展開して置く
+
+Vicinae は amd64 / arm64 とも AppImage でしか配布されていない
+(x86_64 のみ tar.gz もあるが、両アーキで同じ手順にするため AppImage を使う)。
+AppImage をそのまま実行すると FUSE が必要になるので、
+`--appimage-extract` で中身を取り出して `/opt/vicinae` に置き、
+`/usr/local/bin/vicinae` からラッパーで呼ぶ。FUSE 不要で起動も速い。
+
+`AppRun` は自分の位置から `APPDIR` を決めるため、シンボリックリンクではなく
+ラッパースクリプトで呼んでいる。
+
+AppImage は `libOpenGL.so.0` を同梱していないので、`libopengl0` を
+apt で入れている (これがないとサーバーが起動時に落ちる)。
+
+### カスタムキーバインドも 1 ファイルで管理する
+
+`custom-keybindings` は `enabled-extensions` と同じく 1 つのキーに配列を並べる形式で、
+モジュールごとに `/etc/dconf/db/local.d/` へ書くとお互いを消してしまう。
+
+そこで `/var/lib/mk-ubuntu/custom-keybindings/` を登録簿とし、
+`lib/common.sh` の `dconf_set_custom_keybinding` が呼ばれるたびに
+`/etc/dconf/db/local.d/35-custom-keybindings` を作り直す。
+`customN` の番号は登録 ID の辞書順で決まるので、何度実行しても同じ結果になる。
+
+現在の登録: `terminal` (Ctrl+Alt+T) と `vicinae` (F12)。
+
+### 画面ロック中は xremap のアプリ別リマップが止まる
+
+GNOME は画面ロック中に拡張をアンロードする。xremap の GNOME 拡張も
+止まるため、`application:` 条件を使う `keymap` (Alt+C などの Mac 風バインド) は
+ロック中は適用されない。`modmap` の CapsLock → Ctrl はロック中も効く。
+ロック解除で拡張は自動的に読み込み直され、元に戻る。
+
+GNOME の仕様であって本リポジトリの不具合ではないが、
+検証時にこれを踏むと assert が時間依存で落ちるため、
+ハーネスは検証前にロックを解除して自動ロックを止める。
 
 ### xremap の systemd ユニット
 

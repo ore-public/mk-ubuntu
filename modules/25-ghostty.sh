@@ -21,8 +21,6 @@ MODULE_NAME="25-ghostty"
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/lib/common.sh"
 
 GHOSTTY_DESKTOP_ID="com.mitchellh.ghostty.desktop"
-DCONF_GHOSTTY_FILE="${DCONF_DB_DIR}/20-ghostty"
-CUSTOM_KEYBINDING_PATH="/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/"
 
 install_skel_config() {
   install_file "${REPO_ROOT}/files/skel/.config/ghostty/config" \
@@ -55,19 +53,10 @@ EOF
 # コマンドは ghostty を直接呼ばず xdg-terminal-exec 経由にして、
 # 既定ターミナルの定義箇所を xdg-terminals.list 1 か所に集約する。
 set_terminal_shortcut() {
-  ensure_dconf_profile
-  write_file "$DCONF_GHOSTTY_FILE" 0644 <<EOF
-# Ctrl+Alt+T で既定ターミナル (= Ghostty) を開く。
-# GNOME 50 の gnome-settings-daemon には組み込みの terminal キーがないため、
-# カスタムキーバインドとして登録する。
-[org/gnome/settings-daemon/plugins/media-keys]
-custom-keybindings=['${CUSTOM_KEYBINDING_PATH}']
-
-[org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0]
-name='Open Terminal'
-command='xdg-terminal-exec'
-binding='<Primary><Alt>t'
-EOF
+  # GNOME 50 の gnome-settings-daemon には組み込みの terminal キーがないため、
+  # カスタムキーバインドとして登録する。
+  # 登録簿の仕組みは lib/common.sh を参照 (他モジュールの登録と共存できる)。
+  dconf_set_custom_keybinding "terminal" "Open Terminal" "xdg-terminal-exec" "<Primary><Alt>t"
   dconf_update
 }
 

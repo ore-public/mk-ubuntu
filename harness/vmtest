@@ -218,12 +218,24 @@ cmd_provision() {
 # assert
 # ---------------------------------------------------------------------------
 
+# 画面がロックされていると GNOME は拡張をアンロードするため、
+# xremap の GNOME 拡張が応答しなくなり、アプリ別リマップの検証が落ちる。
+# 検証前にロックを解除し、自動ロックを止めておく (ゲスト側のテスト環境整備であり、
+# 検証対象の設定には触れない)。
+prepare_guest_session() {
+  guest_sudo "loginctl unlock-sessions" >/dev/null 2>&1 || true
+  guest_run "gsettings set org.gnome.desktop.screensaver lock-enabled false;
+             gsettings set org.gnome.desktop.session idle-delay 0" >/dev/null 2>&1 || true
+}
+
 # ゲストで各 assert スクリプトを実行し、出力の ok / not ok 行を集約して
 # TAP 形式で出力する。1 つでも失敗すれば非 0 で終了する。
 cmd_assert() {
   local logfile raw script name total=0 failed=0
   logfile="${LOG_DIR}/$(timestamp)-assert.log"
   raw="$(mktemp)"
+
+  prepare_guest_session
 
   for script in "${HARNESS_DIR}"/asserts/*.sh; do
     [ -e "$script" ] || continue
@@ -302,6 +314,9 @@ cmd_e2e() {
   local logfile script name rc=0
   logfile="${LOG_DIR}/$(timestamp)-e2e.log"
   : >"$logfile"
+
+  # keymap の検証は GNOME 拡張の応答が前提なので、ロックを解除しておく
+  prepare_guest_session
 
   for script in "${HARNESS_DIR}"/e2e/*.sh; do
     [ -e "$script" ] || continue
