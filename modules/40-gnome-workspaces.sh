@@ -24,15 +24,21 @@ DCONF_WORKSPACES_FILE="${DCONF_DB_DIR}/40-workspaces"
 AUTO_MOVE_UUID="auto-move-windows@gnome-shell-extensions.gcampax.github.com"
 AUTO_MOVE_DIR="/usr/share/gnome-shell/extensions/${AUTO_MOVE_UUID}"
 
+# Auto Move Windows は「ウィンドウを移す」だけで表示は切り替えないため、
+# アプリを起動しても手元の画面は動かない。行き先へ一緒に移動するように、
+# 自作の小さな拡張を添える (files/gnome-extensions/ に同梱)。
+FOLLOW_UUID="follow-moved-windows@mk-ubuntu"
+FOLLOW_SRC="${REPO_ROOT}/files/gnome-extensions/${FOLLOW_UUID}"
+FOLLOW_DIR="/usr/share/gnome-shell/extensions/${FOLLOW_UUID}"
+
 # アプリ (desktop ファイル名) → ワークスペース番号 の既定割当。
 # 変更方法は README を参照。
 #
 # Discord と Zoom は amd64 でしか導入されないが、未導入のアプリを並べておいても
 # 実害はない (該当するウィンドウが出てこないだけ) ので、両アーキで同じ値にする。
 #
-# 初回ウィザードは Ghostty で開くが、ワークスペース 6 へ飛ばされると
-# ログイン直後に見えなくなってしまう。そのため専用の WM_CLASS を付けて
-# ここの対象から外している (files/skel/.config/autostart を参照)。
+# 初回ウィザードは Ghostty で開くのでワークスペース 6 へ振り分けられるが、
+# 画面もそちらへ追随する (下の follow-moved-windows 拡張) ので問題ない。
 AUTO_MOVE_LIST="['brave-browser.desktop:1', 'com.mitchellh.ghostty.desktop:6', 'Zoom.desktop:8', 'discord.desktop:9']"
 
 # Ctrl+N / Ctrl+Shift+N のキーバインド定義を組み立てる。
@@ -74,6 +80,31 @@ EOF
   } | write_file "$DCONF_WORKSPACES_FILE" 0644
 }
 
+# 自作拡張を配置する。zip ではなくリポジトリ内のディレクトリをそのまま置く。
+install_follow_extension() {
+  [ -d "$FOLLOW_SRC" ] || die "同梱の拡張が見つかりません: $FOLLOW_SRC"
+
+  if [ -d "$FOLLOW_DIR" ] && diff -r -q "$FOLLOW_SRC" "$FOLLOW_DIR" >/dev/null 2>&1; then
+    log "変更なし: $FOLLOW_DIR"
+  else
+    rm -rf "$FOLLOW_DIR"
+    install -d "$FOLLOW_DIR"
+    cp -a "${FOLLOW_SRC}/." "${FOLLOW_DIR}/"
+    chmod -R a+rX "$FOLLOW_DIR"
+    log "配置: $FOLLOW_DIR"
+  fi
+
+  local shell_major
+  if command -v gnome-shell >/dev/null 2>&1; then
+    shell_major="$(gnome-shell --version 2>/dev/null | grep -oE '[0-9]+' | head -n 1)"
+    if [ -n "$shell_major" ] &&
+      ! grep -q "\"${shell_major}\"" "${FOLLOW_DIR}/metadata.json"; then
+      warn "自作拡張の metadata.json が GNOME ${shell_major} に対応していません。"
+      warn "GNOME の更新に追随する必要があります (docs/development.md 参照)。"
+    fi
+  fi
+}
+
 main() {
   require_root
 
@@ -81,7 +112,8 @@ main() {
     warn "Auto Move Windows 拡張が見つかりません (${AUTO_MOVE_DIR})。gnome-shell-extensions を確認してください。"
 
   write_dconf_defaults
-  dconf_enable_extension "$AUTO_MOVE_UUID"
+  install_follow_extension
+  dconf_enable_extension "$AUTO_MOVE_UUID" "$FOLLOW_UUID"
   dconf_update
 
   log "ワークスペース数: ${WORKSPACE_COUNT} (固定)"
@@ -90,6 +122,7 @@ main() {
   log "  ターミナル (Ghostty) -> ワークスペース 6"
   log "  Zoom               -> ワークスペース 8"
   log "  Discord            -> ワークスペース 9"
+  log "アプリ起動時は、そのワークスペースへ画面も一緒に移動します。"
   log "反映にはログアウトとログインが必要です。"
 }
 

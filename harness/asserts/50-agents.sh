@@ -37,14 +37,6 @@ check_contains /etc/skel/.config/autostart/first-run-wizard.desktop \
 check_contains /etc/skel/.config/autostart/first-run-wizard.desktop \
   '^Exec=ghostty .*"--title=[^"]+"' \
   "自動起動 .desktop のタイトル指定が二重引用符で囲まれている"
-# ウィザードは Ghostty と別の WM_CLASS を持つ。
-# こうしないと Auto Move Windows がターミナル扱いでワークスペース 6 へ飛ばし、
-# ログイン直後に画面から消えてしまう。
-check_contains /etc/skel/.config/autostart/first-run-wizard.desktop \
-  '^Exec=ghostty --class=mk-ubuntu-first-run-wizard ' \
-  "ウィザードが専用の WM_CLASS で起動する"
-check "ウィザードの WM_CLASS が自動移動の対象になっていない" \
-  bash -c "! gsettings get org.gnome.shell.extensions.auto-move-windows application-list | grep -q 'mk-ubuntu-first-run-wizard'"
 
 # 認証情報が焼き込まれていないこと
 check "リポジトリ由来の設定に API キーが含まれていない" \

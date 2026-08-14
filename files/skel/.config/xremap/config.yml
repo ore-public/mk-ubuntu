@@ -21,10 +21,7 @@ modmap:
 keymap:
   - name: Global Mac Bindings (Except Terminals)
     application:
-      # mk-ubuntu-first-run-wizard は初回ウィザードの Ghostty ウィンドウ。
-      # 自動移動を避けるため WM_CLASS を分けているが、中身はターミナルなので
-      # ここでも同じように除外する。
-      not: [com.mitchellh.ghostty, org.gnome.Ptyxis, mk-ubuntu-first-run-wizard]
+      not: [com.mitchellh.ghostty, org.gnome.Ptyxis]
     remap:
       # Mac の Command 相当を Alt に割り当てる
       Alt-c: Ctrl-c

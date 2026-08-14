@@ -29,7 +29,9 @@ for p in install.sh README.md lib/common.sh bin/first-run-wizard \
   files/skel/.config/autostart/first-run-wizard.desktop \
   files/systemd/xremap.service \
   files/claude-skills/herdr-ops/SKILL.md \
-  "files/gnome-extensions/xremap@k0kubun.com.v15.shell-extension.zip"; do
+  "files/gnome-extensions/xremap@k0kubun.com.v15.shell-extension.zip" \
+  "files/gnome-extensions/follow-moved-windows@mk-ubuntu/metadata.json" \
+  "files/gnome-extensions/follow-moved-windows@mk-ubuntu/extension.js"; do
   check_exists "$p"
 done
 

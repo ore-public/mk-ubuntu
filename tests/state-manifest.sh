@@ -92,6 +92,7 @@ find /etc/skel/.zim/modules -maxdepth 1 -mindepth 1 -type d 2>/dev/null |
 echo
 echo "=== GNOME 拡張 ==="
 hash_tree /usr/share/gnome-shell/extensions/xremap@k0kubun.com
+hash_tree /usr/share/gnome-shell/extensions/follow-moved-windows@mk-ubuntu
 
 echo
 echo "=== 既存ユーザーへ配った管理ファイル ==="

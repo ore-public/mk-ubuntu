@@ -42,8 +42,6 @@ check_contains /etc/skel/.config/xremap/config.yml "CapsLock: Ctrl_L" \
   "xremap 設定に CapsLock -> Ctrl がある"
 check_contains /etc/skel/.config/xremap/config.yml "com.mitchellh.ghostty" \
   "xremap 設定がターミナルを除外している"
-check_contains /etc/skel/.config/xremap/config.yml "mk-ubuntu-first-run-wizard" \
-  "xremap 設定が初回ウィザードのウィンドウも除外している"
 check_contains /etc/skel/.config/xremap/config.yml "Ctrl-p: Up" \
   "xremap 設定に Ctrl-p -> Up がある"
 check_contains /etc/skel/.config/xremap/config.yml "Alt-q: Alt-F4" \

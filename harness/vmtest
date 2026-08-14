@@ -434,28 +434,28 @@ cmd_shots() {
 
   prepare_guest_session
 
-  # ウィザードは専用の WM_CLASS を持つので自動移動の対象外。
-  # ログイン直後のワークスペース (1) に出ているはず。
+  # ウィザードは Ghostty なのでワークスペース 6 へ振り分けられるが、
+  # follow-moved-windows 拡張が画面もそちらへ移すので見えているはず。
   log "レベル 2: 初回ウィザードの画面を撮ります"
   cmd_shot "01-wizard" || true
+
+  # まずワークスペース 1 へ戻ってから起動し、画面が追随するかを見る
+  guest_key "29:1 2:1 2:0 29:0"
+  sleep 3
+
+  log "レベル 2: ワークスペース 1 から Ghostty を起動し、6 へ追随するかを撮ります"
+  guest_gui_run "shot-ghostty" "ghostty"
+  sleep 12
+  cmd_shot "02-ghostty-follow-to-workspace6" || true
 
   # Brave の起動時にログインキーリングの入力を求められると画面を覆ってしまう。
   # 検証 VM は自動ログインのためキーリングが解錠されていないので、
   # キーリングを使わない設定で起動する (ゲスト側のテスト事情であり、
   # 通常のログインでは起きない)。
-  log "レベル 2: Brave を起動してワークスペース 1 への自動配置を撮ります"
+  log "レベル 2: ワークスペース 6 から Brave を起動し、1 へ追随するかを撮ります"
   guest_gui_run "shot-brave" "brave-browser --password-store=basic --no-first-run"
   sleep 20
-  cmd_shot "02-brave-workspace1" || true
-
-  log "レベル 2: Ghostty を起動してワークスペース 6 への自動配置を撮ります"
-  guest_gui_run "shot-ghostty" "ghostty"
-  sleep 12
-  # Auto Move Windows は別のワークスペースへ移すだけで表示は切り替えないので、
-  # Ctrl+6 を実際に打って移動する (ワークスペース移動キーの確認も兼ねる)
-  guest_key "29:1 7:1 7:0 29:0"
-  sleep 4
-  cmd_shot "03-ghostty-workspace6" || true
+  cmd_shot "03-brave-follow-to-workspace1" || true
 
   log "レベル 2: F12 で Vicinae が開くところを撮ります"
   guest_key "88:1 88:0"

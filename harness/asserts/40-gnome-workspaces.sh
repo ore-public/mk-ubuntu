@@ -40,6 +40,17 @@ check_cmd_output "Zoom がワークスペース 8" "Zoom.desktop:8" \
 check_cmd_output "Discord がワークスペース 9" "discord.desktop:9" \
   gsettings get org.gnome.shell.extensions.auto-move-windows application-list
 
+# アプリと一緒にワークスペースを移動する自作拡張
+FOLLOW_UUID="follow-moved-windows@mk-ubuntu"
+FOLLOW_DIR="/usr/share/gnome-shell/extensions/${FOLLOW_UUID}"
+check_dir "$FOLLOW_DIR"
+check_file "${FOLLOW_DIR}/metadata.json"
+check_file "${FOLLOW_DIR}/extension.js"
+check_contains "${FOLLOW_DIR}/metadata.json" "\"50\"" \
+  "自作拡張が GNOME 50 に対応している"
+check_cmd_output "enabled-extensions に自作拡張がある" "$FOLLOW_UUID" \
+  gsettings get org.gnome.shell enabled-extensions
+
 # enabled-extensions を書くファイルは 1 つだけ (モジュール間の上書き事故を防ぐ)
 check "enabled-extensions を定義する local.d ファイルは 1 つだけ" \
   bash -c "[ \"\$(grep -l 'enabled-extensions' /etc/dconf/db/local.d/* 2>/dev/null | wc -l)\" -eq 1 ]"

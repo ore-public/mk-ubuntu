@@ -1,0 +1,7 @@
+{
+  "uuid": "follow-moved-windows@mk-ubuntu",
+  "name": "Follow Moved Windows",
+  "description": "Auto Move Windows がウィンドウを別のワークスペースへ振り分けたとき、そのワークスペースへ画面も一緒に移動する。",
+  "shell-version": ["50"],
+  "version": 1
+}

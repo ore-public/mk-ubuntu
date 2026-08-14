@@ -376,22 +376,40 @@ extensions.gnome.org の配布物 (v15、GNOME 45〜50 対応) をリポジト�
 インストーラによって後から作られるため `/etc/skel` だけで足りる。
 このモジュールは「既に使っている Ubuntu に後から適用する」場合のためのもの。
 
-### 初回ウィザードだけ Ghostty と別の WM_CLASS にする
+### アプリと一緒にワークスペースを移動する自作拡張
 
-Auto Move Windows はウィンドウをアプリ単位で振り分けるので、
-ターミナルをワークスペース 6 に割り当てると
-**Ghostty で開く初回ウィザードも 6 へ飛ばされる**。
-ログイン直後に見えるのはワークスペース 1 なので、
-案内役であるはずのウィザードが画面から消えてしまう。
+GNOME 標準の Auto Move Windows は
+`window.change_workspace_by_index(n, false)` でウィンドウを移すだけで、
+**表示中のワークスペースは切り替えない**。そのためアプリを起動しても
+手元の画面は変わらず、「準備ができました」の通知が出るだけになる。
 
-Auto Move Windows は desktop ファイル単位でしか指定できず、
-「同じアプリのこのウィンドウだけ別扱い」はできない。
-そこで自動起動の `.desktop` で `ghostty --class=mk-ubuntu-first-run-wizard`
-として WM_CLASS を分け、割当表から外している
-(`ghostty --class=` が WM_CLASS を変えられることは実機で確認済み)。
+extensions.gnome.org を探しても、これを補う拡張は見当たらなかった。
+そこで `files/gnome-extensions/follow-moved-windows@mk-ubuntu/` に
+小さな拡張を自作して同梱している。
 
-WM_CLASS を分けると xremap のターミナル除外からも外れてしまうため、
-`config.yml` の `not:` にも同じ名前を足してある。
+- Auto Move Windows と**同じ設定** (`application-list`) を読む
+- 対象アプリのウィンドウが実際に行き先へ移動していたら
+  `window.activate()` を呼ぶ (ワークスペース切り替えとフォーカスを兼ねる)
+- 割当表に載っているアプリだけが対象。他のウィンドウでは画面を動かさない
+
+**これはこのリポジトリで保守する自作コード**である。GNOME の拡張 API は
+メジャーバージョンごとに変わるため、GNOME 51 以降へ上げるときは追随が要る。
+`40-gnome-workspaces.sh` は metadata.json の対応バージョンが
+実行中の GNOME と合わないときに警告を出す。
+
+#### WM_CLASS を変えても Auto Move Windows からは逃げられない
+
+当初、ターミナルをワークスペース 6 にすると
+「Ghostty で開く初回ウィザードも 6 へ飛ばされ、ログイン直後に見えなくなる」
+問題を、`ghostty --class=...` で WM_CLASS を分けて回避しようとした。
+`--class` が WM_CLASS を変えること自体は実機で確認できたが、
+**Auto Move Windows は WM_CLASS ではなくアプリ (desktop ファイル) 単位で
+判定する**ため、ウィンドウは Ghostty 扱いのままで効果がなかった。
+スクリーンショット (レベル 2) を見て初めて分かった
+(`.desktop` の中身を見るアサーションは通ってしまっていた)。
+
+現在は小細工をやめ、上記の自作拡張で画面が追随することによって
+ウィザードが見える状態を確保している。
 
 ### Alt+Q は Ctrl+Q ではなく Alt+F4 に変換する
 

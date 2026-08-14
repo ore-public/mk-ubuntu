@@ -71,6 +71,12 @@ if command -v gnome-extensions >/dev/null 2>&1; then
     gnome-extensions info "vicinae@dagimg-dot"
 fi
 
+# アプリと一緒にワークスペースを移動する自作拡張が読み込まれていること
+if command -v gnome-extensions >/dev/null 2>&1; then
+  check_cmd_output "自作拡張 (Follow Moved Windows) が ACTIVE" "State: ACTIVE" \
+    gnome-extensions info "follow-moved-windows@mk-ubuntu"
+fi
+
 # Ubuntu が既定で有効にしている拡張を消していないこと
 # (enabled-extensions をシステム既定値で上書きする副作用の確認)
 if command -v gnome-extensions >/dev/null 2>&1; then
