@@ -389,13 +389,26 @@ extensions.gnome.org を探しても、これを補う拡張は見当たらな�
 
 - Auto Move Windows と**同じ設定** (`application-list`) を読む
 - 対象アプリのウィンドウが実際に行き先へ移動していたら
-  `window.activate()` を呼ぶ (ワークスペース切り替えとフォーカスを兼ねる)
+  `Main.activateWindow()` を呼ぶ (ワークスペース切り替えとフォーカスを兼ねる)
+- Auto Move Windows の移動が間に合わないことがあるので、
+  行き先に着くまで数回だけ確認し直す
 - 割当表に載っているアプリだけが対象。他のウィンドウでは画面を動かさない
 
 **これはこのリポジトリで保守する自作コード**である。GNOME の拡張 API は
 メジャーバージョンごとに変わるため、GNOME 51 以降へ上げるときは追随が要る。
 `40-gnome-workspaces.sh` は metadata.json の対応バージョンが
 実行中の GNOME と合わないときに警告を出す。
+
+#### `Meta.Window.activate()` ではワークスペースが切り替わらない
+
+最初は `window.activate(global.get_current_time())` を呼んでいたが、
+**画面は切り替わらず「準備ができました」の通知が出るだけ**だった。
+イベント由来のタイムスタンプがない状況ではフォーカス奪取の防止に
+引っかかるためと考えられる。GNOME Shell 自身が使っている
+`Main.activateWindow()` に変えたところ、意図どおり追随するようになった。
+
+これもアサーション (拡張が ACTIVE であること) は通っていて、
+スクリーンショットを見て初めて分かった。
 
 #### WM_CLASS を変えても Auto Move Windows からは逃げられない
 

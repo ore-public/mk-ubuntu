@@ -7,8 +7,12 @@
 //
 // この拡張は、Auto Move Windows と同じ設定 (application-list) を読み、
 // 振り分け対象のウィンドウが実際にそのワークスペースへ移動していたら
-// window.activate() を呼ぶ。activate はワークスペースの切り替えと
+// Main.activateWindow() を呼ぶ。これはワークスペースの切り替えと
 // フォーカスの両方を行うので、結果として「アプリと一緒に移動する」挙動になる。
+//
+// Meta.Window.activate() を直接呼ぶ方法は使わない。イベント由来のタイムスタンプが
+// ない状況ではフォーカス奪取の防止に引っかかり、ワークスペースが切り替わらずに
+// 「準備ができました」の通知が出るだけで終わる (実機で確認済み)。
 //
 // 対象は application-list に載っているアプリだけ。それ以外のウィンドウが
 // 別のワークスペースで開いても画面は動かさない。
@@ -17,12 +21,18 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Shell from 'gi://Shell';
 import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
+import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 const AUTO_MOVE_SCHEMA = 'org.gnome.shell.extensions.auto-move-windows';
 
 // Auto Move Windows がウィンドウを移し終えるのを待つ時間 (ミリ秒)。
 // どちらも window-created を契機に動くため、こちらが後になるようにずらす。
 const FOLLOW_DELAY_MS = 250;
+
+// 上の待ち時間で間に合わなかったときの再確認 (ミリ秒) と回数。
+// アプリの起動が遅いと、最初の確認時点ではまだ移動していないことがある。
+const FOLLOW_RETRY_MS = 500;
+const FOLLOW_RETRIES = 4;
 
 export default class FollowMovedWindows extends Extension {
   enable() {
@@ -53,12 +63,20 @@ export default class FollowMovedWindows extends Extension {
     if (!window || window.skip_taskbar || window.is_on_all_workspaces())
       return;
 
-    const id = GLib.timeout_add(GLib.PRIORITY_DEFAULT, FOLLOW_DELAY_MS, () => {
+    this._scheduleFollow(window, FOLLOW_DELAY_MS, FOLLOW_RETRIES);
+  }
+
+  _scheduleFollow(window, delay, retriesLeft) {
+    const id = GLib.timeout_add(GLib.PRIORITY_DEFAULT, delay, () => {
       this._timeouts?.delete(id);
-      this._follow(window);
+
+      // まだ移動していなければ少し待って見直す
+      if (!this._follow(window) && retriesLeft > 0)
+        this._scheduleFollow(window, FOLLOW_RETRY_MS, retriesLeft - 1);
+
       return GLib.SOURCE_REMOVE;
     });
-    this._timeouts.add(id);
+    this._timeouts?.add(id);
   }
 
   // application-list から、そのアプリの行き先ワークスペース番号 (0 始まり) を得る。
@@ -81,31 +99,35 @@ export default class FollowMovedWindows extends Extension {
     return null;
   }
 
+  // 追いかけ終わった (または追いかける必要がない) なら true、
+  // まだ移動を待っている段階なら false を返す。
   _follow(window) {
     // タイマーの間にウィンドウが閉じられていることがある
     if (!window || !window.get_compositor_private())
-      return;
+      return true;
 
     const app = this._tracker?.get_window_app(window);
     if (!app)
-      return;
+      return true;
 
     const target = this._targetWorkspaceIndex(app.get_id());
     if (target === null)
-      return;
+      return true;
 
     const workspace = window.get_workspace();
     if (!workspace)
-      return;
+      return false;
 
-    // Auto Move Windows がまだ動いていない、または別の場所にいるなら何もしない
+    // Auto Move Windows がまだ動かしていない可能性があるので、
+    // 行き先に着くまでは再確認する
     if (workspace.index() !== target)
-      return;
+      return false;
 
     // 既にそのワークスペースを見ているなら切り替え不要
     if (workspace.active)
-      return;
+      return true;
 
-    window.activate(global.get_current_time());
+    Main.activateWindow(window);
+    return true;
   }
 }
