@@ -2,7 +2,10 @@
 Type=Application
 Name=AI エージェント初回セットアップ
 Comment=Claude Code / Copilot CLI / opencode の認証と、Playwright MCP・herdr 連携の初期設定
-Exec=ghostty "--title=AI エージェント初回セットアップ" -e /usr/local/bin/first-run-wizard
+# --class でウィンドウの WM_CLASS を Ghostty と別にしている。
+# こうしないと Auto Move Windows がターミナル扱いでワークスペース 6 へ
+# 飛ばしてしまい、ログイン直後にウィザードが見えなくなる。
+Exec=ghostty --class=mk-ubuntu-first-run-wizard "--title=AI エージェント初回セットアップ" -e /usr/local/bin/first-run-wizard
 Icon=utilities-terminal
 Terminal=false
 X-GNOME-Autostart-enabled=true

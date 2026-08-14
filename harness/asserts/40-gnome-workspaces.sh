@@ -31,11 +31,13 @@ AUTO_MOVE_UUID="auto-move-windows@gnome-shell-extensions.gcampax.github.com"
 check_dir "/usr/share/gnome-shell/extensions/${AUTO_MOVE_UUID}"
 check_cmd_output "enabled-extensions に Auto Move Windows がある" "$AUTO_MOVE_UUID" \
   gsettings get org.gnome.shell enabled-extensions
-check_cmd_output "Ghostty がワークスペース 1 に割り当てられている" \
-  "com.mitchellh.ghostty.desktop:1" \
+check_cmd_output "ブラウザ (Brave) がワークスペース 1" "brave-browser.desktop:1" \
   gsettings get org.gnome.shell.extensions.auto-move-windows application-list
-check_cmd_output "Brave がワークスペース 2 に割り当てられている" \
-  "brave-browser.desktop:2" \
+check_cmd_output "ターミナル (Ghostty) がワークスペース 6" "com.mitchellh.ghostty.desktop:6" \
+  gsettings get org.gnome.shell.extensions.auto-move-windows application-list
+check_cmd_output "Zoom がワークスペース 8" "Zoom.desktop:8" \
+  gsettings get org.gnome.shell.extensions.auto-move-windows application-list
+check_cmd_output "Discord がワークスペース 9" "discord.desktop:9" \
   gsettings get org.gnome.shell.extensions.auto-move-windows application-list
 
 # enabled-extensions を書くファイルは 1 つだけ (モジュール間の上書き事故を防ぐ)

@@ -157,14 +157,14 @@ sudo ./install.sh
 
 ### アプリごとの起動ワークスペースを変える
 
-初期設定では Ghostty がワークスペース 1、Brave がワークスペース 2 に開きます。
+初期設定は「Brave が 1 / Ghostty が 6 / Zoom が 8 / Discord が 9」です。
 
 - **自分だけ変える**: 「拡張機能」アプリの **Auto Move Windows** の設定から変更
 - **全ユーザーで変える**: `/etc/dconf/db/local.d/40-workspaces` の
   `application-list` を編集して `sudo dconf update`
 
 ```
-application-list=['com.mitchellh.ghostty.desktop:1', 'brave-browser.desktop:2', 'code.desktop:3']
+application-list=['brave-browser.desktop:1', 'com.mitchellh.ghostty.desktop:6', 'Zoom.desktop:8', 'discord.desktop:9', 'code.desktop:3']
 ```
 
 書式は `'<desktop ファイル名>:<ワークスペース番号>'` です。

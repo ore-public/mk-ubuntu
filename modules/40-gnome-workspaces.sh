@@ -24,9 +24,16 @@ DCONF_WORKSPACES_FILE="${DCONF_DB_DIR}/40-workspaces"
 AUTO_MOVE_UUID="auto-move-windows@gnome-shell-extensions.gcampax.github.com"
 AUTO_MOVE_DIR="/usr/share/gnome-shell/extensions/${AUTO_MOVE_UUID}"
 
-# アプリ (desktop ファイル名) → ワークスペース番号 のサンプル割当。
+# アプリ (desktop ファイル名) → ワークスペース番号 の既定割当。
 # 変更方法は README を参照。
-AUTO_MOVE_LIST="['com.mitchellh.ghostty.desktop:1', 'brave-browser.desktop:2']"
+#
+# Discord と Zoom は amd64 でしか導入されないが、未導入のアプリを並べておいても
+# 実害はない (該当するウィンドウが出てこないだけ) ので、両アーキで同じ値にする。
+#
+# 初回ウィザードは Ghostty で開くが、ワークスペース 6 へ飛ばされると
+# ログイン直後に見えなくなってしまう。そのため専用の WM_CLASS を付けて
+# ここの対象から外している (files/skel/.config/autostart を参照)。
+AUTO_MOVE_LIST="['brave-browser.desktop:1', 'com.mitchellh.ghostty.desktop:6', 'Zoom.desktop:8', 'discord.desktop:9']"
 
 # Ctrl+N / Ctrl+Shift+N のキーバインド定義を組み立てる。
 # ワークスペース 10 には Ctrl+0 を割り当てる (数字キーの並び順に合わせる)。
@@ -78,7 +85,11 @@ main() {
   dconf_update
 
   log "ワークスペース数: ${WORKSPACE_COUNT} (固定)"
-  log "Auto Move Windows の割当: ${AUTO_MOVE_LIST}"
+  log "Auto Move Windows の割当:"
+  log "  ブラウザ (Brave)   -> ワークスペース 1"
+  log "  ターミナル (Ghostty) -> ワークスペース 6"
+  log "  Zoom               -> ワークスペース 8"
+  log "  Discord            -> ワークスペース 9"
   log "反映にはログアウトとログインが必要です。"
 }
 
