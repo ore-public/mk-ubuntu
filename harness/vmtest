@@ -8,6 +8,7 @@
 #   ./harness/vmtest sync        リポジトリをゲストへ rsync する
 #   ./harness/vmtest provision   ゲストで sudo ./install.sh を実行する
 #   ./harness/vmtest assert      harness/asserts/ を実行し TAP 形式で結果を出す
+#   ./harness/vmtest amd64       amd64 コンテナでアーキ依存モジュールを検証する
 #   ./harness/vmtest shot <名前> スクリーンショットを harness/shots/<名前>.png に保存する
 #   ./harness/vmtest shots       レベル 2 の撮影シーケンスを通しで実行する
 #   ./harness/vmtest e2e         実キー入力 E2E テスト (flaky 許容)
@@ -235,7 +236,7 @@ prepare_guest_session() {
 # ゲストで各 assert スクリプトを実行し、出力の ok / not ok 行を集約して
 # TAP 形式で出力する。1 つでも失敗すれば非 0 で終了する。
 cmd_assert() {
-  local logfile raw script name total=0 failed=0
+  local logfile raw script name
   logfile="${LOG_DIR}/$(timestamp)-assert.log"
   raw="$(mktemp)"
 
@@ -253,8 +254,20 @@ cmd_assert() {
     fi
   done
 
-  # ok / not ok 行に通し番号を振って TAP にする。
-  # 集計をパイプの外で行うため、いったんログファイルへ書いてから表示する。
+  emit_tap "$raw" "$logfile"
+  local rc=$?
+  rm -f "$raw"
+  log "assert のログ: ${logfile}"
+  return "$rc"
+}
+
+# emit_tap <生ログ> <出力先>
+# ok / not ok 行に通し番号を振って TAP にする。
+# 集計をパイプの外で行うため、いったんファイルへ書いてから表示する。
+# 失敗が 1 件でもあれば非 0 を返す。
+emit_tap() {
+  local raw="$1" logfile="$2" line total=0 failed=0
+
   while IFS= read -r line; do
     case "$line" in
       "ok - "*)
@@ -278,8 +291,6 @@ cmd_assert() {
   } >>"$logfile"
 
   cat "$logfile"
-  rm -f "$raw"
-  log "assert のログ: ${logfile}"
   [ "$failed" -eq 0 ]
 }
 
@@ -306,6 +317,55 @@ cmd_shot() {
     captureScreen "$VMX" "$out" ||
     die "captureScreen に失敗しました。GUEST_PASSWORD が正しいか確認してください。"
   log "スクリーンショット: ${out}"
+}
+
+# ---------------------------------------------------------------------------
+# amd64 (アーキ依存モジュールのクロス検証)
+# ---------------------------------------------------------------------------
+
+# Apple Silicon の VMware Fusion は ARM ゲストしか動かせないため、
+# 検証 VM では amd64 限定のモジュール (17-desktop-apps.sh) を確認できない。
+# ゲストの Docker で amd64 の ubuntu:26.04 コンテナを動かし、そこで
+# モジュールの適用とアサーションを実行する。
+#
+# コンテナなので systemd や GUI は確認できないが、このモジュールが行うのは
+# deb のダウンロードと apt での導入だけなので、検証範囲としては足りる。
+# 実際にアプリを起動する確認は x86_64 実機の手動チェックに残る。
+AMD64_IMAGE="ubuntu:26.04"
+
+cmd_amd64() {
+  local logfile raw
+  logfile="${LOG_DIR}/$(timestamp)-amd64.log"
+  raw="$(mktemp)"
+
+  log "amd64 エミュレーションを有効化します (binfmt)"
+  guest_sudo "docker run --privileged --rm tonistiigi/binfmt --install amd64" \
+    >/dev/null 2>&1 || warn "binfmt の登録に失敗しました。続行します。"
+
+  log "amd64 コンテナで 17-desktop-apps.sh を適用して検証します (時間がかかります)"
+  guest_sudo "docker run --rm --platform linux/amd64 \
+    -v ${GUEST_REPO_DIR}:/repo:ro ${AMD64_IMAGE} bash -c '
+      set -e
+      export DEBIAN_FRONTEND=noninteractive
+      apt-get update -qq
+      apt-get install -y -qq curl ca-certificates gnupg >/dev/null
+      cp -r /repo /work && cd /work
+      if ! ./install.sh 17-desktop-apps.sh >/tmp/provision.log 2>&1; then
+        echo \"not ok - amd64 コンテナで 17-desktop-apps.sh を適用できた\"
+        tail -n 20 /tmp/provision.log | sed \"s/^/#   /\"
+        exit 0
+      fi
+      echo \"ok - amd64 コンテナで 17-desktop-apps.sh を適用できた\"
+      # アサーションの合否は ok / not ok 行で表すので、
+      # ここでの終了コードは 0 に倒す (コンテナ自体の失敗と区別するため)
+      bash harness/asserts/17-desktop-apps.sh || true
+    '" >>"$raw" 2>&1 || printf 'not ok - amd64 コンテナの実行そのものが失敗した\n' >>"$raw"
+
+  emit_tap "$raw" "$logfile"
+  local rc=$?
+  rm -f "$raw"
+  log "amd64 検証のログ: ${logfile}"
+  return "$rc"
 }
 
 # ---------------------------------------------------------------------------
@@ -457,6 +517,9 @@ cmd_full() {
   log "2 回目の実行後にもう一度アサーションを実行します"
   cmd_assert
 
+  log "amd64 限定モジュールをコンテナで検証します"
+  cmd_amd64
+
   # レベル 2 (スクリーンショット) は人が見て判断するものなので、
   # 撮れなくても全体の終了コードには含めない。
   cmd_shots || log "WARNING: レベル 2 の撮影を行えませんでした。"
@@ -502,6 +565,7 @@ main() {
     sync) cmd_sync "$@" ;;
     provision) cmd_provision "$@" ;;
     assert) cmd_assert "$@" ;;
+    amd64) cmd_amd64 "$@" ;;
     shot) cmd_shot "$@" ;;
     shots) cmd_shots "$@" ;;
     e2e) cmd_e2e "$@" ;;

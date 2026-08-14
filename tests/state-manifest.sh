@@ -48,7 +48,7 @@ for p in \
   /etc/profile.d/mk-ubuntu-playwright.sh \
   /etc/apt/keyrings/brave-browser-archive-keyring.gpg \
   /etc/apt/sources.list.d/brave-browser-release.sources \
-  /etc/apt/keyrings/1password-archive-keyring.gpg \
+  /usr/share/keyrings/1password-archive-keyring.gpg \
   /etc/apt/sources.list.d/1password.sources \
   /etc/apt/keyrings/docker.gpg \
   /etc/apt/sources.list.d/docker.sources \

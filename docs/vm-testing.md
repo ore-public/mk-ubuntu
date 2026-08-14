@@ -15,6 +15,7 @@ Mac 側で実行する。`harness/config.env` が必要。
 | `./harness/vmtest sync` | リポジトリを rsync でゲストの `~/distro-setup/` へ転送 |
 | `./harness/vmtest provision` | ゲストで `sudo ./install.sh` を実行し、ログを `harness/logs/` に保存 |
 | `./harness/vmtest assert` | `harness/asserts/` をゲスト実行し、TAP 形式で集約出力 |
+| `./harness/vmtest amd64` | amd64 コンテナでアーキ依存モジュールを検証 (エミュレーションのため遅い) |
 | `./harness/vmtest shot <名前>` | 画面キャプチャを `harness/shots/<名前>.png` に保存 |
 | `./harness/vmtest e2e` | 実キー入力 E2E テスト (flaky 許容、1 回リトライ) |
 | `./harness/vmtest full` | 上記を通しで実行し、冪等性 (2 回実行して差分なし) も確認 |
@@ -26,7 +27,7 @@ Mac 側で実行する。`harness/config.env` が必要。
 reset → sync → provision(1回目) → 状態マニフェスト記録
      → reboot → assert
      → provision(2回目) → 状態マニフェスト記録 → マニフェスト差分ゼロを確認
-     → assert → shot → e2e
+     → assert → amd64 → shots → e2e
 ```
 
 終了コードには **レベル 1 (assert) と冪等性の結果だけ**が反映される。
@@ -177,8 +178,9 @@ VM でも確認できるが、描画品質と打鍵感は実機の値と異な�
 - [ ] `docker run --rm hello-world` が sudo なしで通る (再ログイン後)
 - [ ] `docker compose version` が表示される
 
-> arm64 の検証 VM では Discord / Zoom / 1Password / Dropbox は
-> 導入されない。ハーネスは「導入されていないこと」までを確認する。
+> arm64 の検証 VM では Discord / Zoom / 1Password / Dropbox は導入されない。
+> パッケージの導入経路は `vmtest amd64` が amd64 コンテナで確認するので、
+> 実機で見るべきは「実際に起動してログインできるか」だけ。
 
 ### 新規ユーザー
 

@@ -16,6 +16,9 @@
 #   Dropbox        … バージョン付き URL があるので固定 + SHA256 検証。
 #   1Password      … 1Password 公式の apt リポジトリを使う。
 #                     パスワード管理ソフトなので更新が届く経路を優先する。
+#                     ただし導入後は **パッケージ自身が apt リポジトリ定義を
+#                     管理する** ので、こちらは「まだ入っていないときの足場」
+#                     だけを用意して、以後は触らない。
 #
 set -euo pipefail
 
@@ -40,8 +43,13 @@ DROPBOX_SHA256="f6eaec9fe18ef87ac376fdba276ad7390207e170837f9bbf64d812266961a707
 DROPBOX_PACKAGE="dropbox"
 
 # 1Password: 公式 apt リポジトリ
+# 導入時に postinst が下記を行う (deb の postinst で確認済み):
+#   - /usr/share/keyrings/1password-archive-keyring.gpg を置く
+#   - /etc/apt/sources.list.d/1password.sources を自分の内容で上書きする
+#     (先頭に「このファイルは 1Password パッケージが管理する」と書かれる)
+# したがって、こちらが用意するのは導入前の足場だけ。
 ONEPASSWORD_KEY_URL="https://downloads.1password.com/linux/keys/1password.asc"
-ONEPASSWORD_KEYRING="/etc/apt/keyrings/1password-archive-keyring.gpg"
+ONEPASSWORD_BOOTSTRAP_KEYRING="/etc/apt/keyrings/1password-archive-keyring.gpg"
 ONEPASSWORD_REPO_URL="https://downloads.1password.com/linux/debian/amd64"
 ONEPASSWORD_SOURCES="/etc/apt/sources.list.d/1password.sources"
 ONEPASSWORD_PACKAGE="1password"
@@ -99,32 +107,32 @@ install_pinned_deb() {
   log "導入: ${label} ${version}"
 }
 
-setup_1password_repository() {
-  install -d -m 0755 /etc/apt/keyrings
-
-  if [ -f "$ONEPASSWORD_KEYRING" ]; then
-    log "変更なし: $ONEPASSWORD_KEYRING"
-  else
-    local tmp
-    tmp="$(mktemp)"
-    log "1Password の署名鍵を取得します"
-    if ! curl -fsSL --retry 3 --retry-delay 2 -o "$tmp" "$ONEPASSWORD_KEY_URL"; then
-      rm -f "$tmp"
-      warn "1Password の署名鍵の取得に失敗しました。スキップします。"
-      return 1
-    fi
-    gpg --dearmor <"$tmp" >"${ONEPASSWORD_KEYRING}.tmp" || {
-      rm -f "$tmp" "${ONEPASSWORD_KEYRING}.tmp"
-      warn "1Password の署名鍵の変換に失敗しました。"
-      return 1
-    }
-    install -m 0644 "${ONEPASSWORD_KEYRING}.tmp" "$ONEPASSWORD_KEYRING"
-    rm -f "$tmp" "${ONEPASSWORD_KEYRING}.tmp"
-    log "配置: $ONEPASSWORD_KEYRING"
+# 1Password は導入後、パッケージ自身が apt リポジトリ定義を管理する。
+# こちらが毎回書き直すと、実行のたびに内容が入れ替わって冪等でなくなるため、
+# 「まだ入っていないときだけ足場を作って導入する」方式にしている。
+install_1password() {
+  if package_installed "$ONEPASSWORD_PACKAGE"; then
+    log "変更なし: 1Password (apt リポジトリはパッケージ自身が管理します)"
+    return 0
   fi
 
-  local before=""
-  [ -f "$ONEPASSWORD_SOURCES" ] && before="$(sha256sum "$ONEPASSWORD_SOURCES" | cut -d' ' -f1)"
+  install -d -m 0755 /etc/apt/keyrings
+
+  local tmp
+  tmp="$(mktemp)"
+  log "1Password の署名鍵を取得します (導入用の足場)"
+  if ! curl -fsSL --retry 3 --retry-delay 2 -o "$tmp" "$ONEPASSWORD_KEY_URL"; then
+    rm -f "$tmp"
+    warn "1Password の署名鍵の取得に失敗しました。スキップします。"
+    return 0
+  fi
+  if ! gpg --dearmor <"$tmp" >"${ONEPASSWORD_BOOTSTRAP_KEYRING}.tmp"; then
+    rm -f "$tmp" "${ONEPASSWORD_BOOTSTRAP_KEYRING}.tmp"
+    warn "1Password の署名鍵の変換に失敗しました。スキップします。"
+    return 0
+  fi
+  install -m 0644 "${ONEPASSWORD_BOOTSTRAP_KEYRING}.tmp" "$ONEPASSWORD_BOOTSTRAP_KEYRING"
+  rm -f "$tmp" "${ONEPASSWORD_BOOTSTRAP_KEYRING}.tmp"
 
   write_file "$ONEPASSWORD_SOURCES" 0644 <<EOF
 Types: deb
@@ -132,12 +140,21 @@ URIs: ${ONEPASSWORD_REPO_URL}
 Suites: stable
 Components: main
 Architectures: amd64
-Signed-By: ${ONEPASSWORD_KEYRING}
+Signed-By: ${ONEPASSWORD_BOOTSTRAP_KEYRING}
 EOF
 
-  if [ "$before" != "$(sha256sum "$ONEPASSWORD_SOURCES" | cut -d' ' -f1)" ]; then
-    APT_UPDATED=0
+  APT_UPDATED=0
+  apt_update_once
+  log "1Password を導入します"
+  if ! apt-get "${APT_OPTS[@]}" install -y -qq "$ONEPASSWORD_PACKAGE"; then
+    warn "1Password の導入に失敗しました。"
+    return 0
   fi
+
+  # 導入が済むと postinst が /usr/share/keyrings/ に自前の鍵を置き、
+  # sources も自分の内容で書き換える。足場の鍵はもう使われないので片付ける。
+  rm -f "$ONEPASSWORD_BOOTSTRAP_KEYRING"
+  log "導入: 1Password (以後の更新はパッケージ自身の apt チャンネルが担当)"
 }
 
 main() {
@@ -156,9 +173,7 @@ main() {
   install_pinned_deb "$DROPBOX_PACKAGE" "$DROPBOX_URL" "$DROPBOX_SHA256" \
     "$DROPBOX_VERSION" "Dropbox"
 
-  if setup_1password_repository; then
-    apt_install "$ONEPASSWORD_PACKAGE"
-  fi
+  install_1password
 
   log "Dropbox は初回起動時に本体をダウンロードします (アプリから案内が出ます)。"
 }

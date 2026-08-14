@@ -155,6 +155,19 @@ Discord / Zoom / 1Password / Dropbox は、Ubuntu の apt や snap ではなく
 | Dropbox | 公式サイトの deb | **固定 + SHA256** | バージョン付き URL が公開されている |
 | 1Password | 公式 apt リポジトリ | 固定しない | セキュリティ更新を受け取るため |
 
+**1Password の apt リポジトリ定義はパッケージ自身が管理する。**
+deb の postinst を読んで確認したところ、導入時に
+`/usr/share/keyrings/1password-archive-keyring.gpg` を置き、
+`/etc/apt/sources.list.d/1password.sources` を自分の内容で上書きする
+(ファイル先頭に「このファイルは 1Password パッケージが管理する。
+変更は上書きされる」と書かれる)。
+
+そのため、こちらは **導入前の足場だけ**を用意し、導入が済んだら足場の鍵を片付けて
+以後は一切触らない。毎回書き直すと、実行のたびにファイルの内容が
+自分の版とパッケージの版で入れ替わり、**冪等でなくなる**。
+これは `vmtest amd64` を入れて初めて見つかった (arm64 の VM では
+このモジュールごとスキップされるため決して踏めなかった)。
+
 Discord と Zoom は「導入済みなら何もしない」方式にしている。
 毎回ダウンロードすると遅く、かつ最新版が変わるたびに再インストールが
 走って冪等性が崩れるため。更新はアプリ自身が行う。
@@ -169,10 +182,42 @@ Discord と Zoom は「導入済みなら何もしない」方式にしている
 | Dropbox | あり | 配布なし (公式の deb 置き場に amd64 しかない) |
 
 そのため `17-desktop-apps.sh` は arm64 では丸ごとスキップする。
-**検証 VM は arm64 なので、この 4 つの導入経路は VM では検証できない。**
 `harness/asserts/17-desktop-apps.sh` は arm64 では
 「導入されていないこと」と「余計なリポジトリを足していないこと」を確認し、
-amd64 では実際の導入結果を確認する。amd64 での確認は x86_64 実機で行う。
+amd64 では実際の導入結果を確認する。
+
+### amd64 の検証は Docker のエミュレーションで行う
+
+Apple Silicon の VMware Fusion は Apple の Hypervisor を使うため
+**ARM ゲストしか動かせない**。x86 のエミュレーション機能はないので、
+Fusion で amd64 の検証 VM を作ることはできない。
+
+選択肢を比べた結果、**ゲストの Docker で amd64 コンテナを動かす**方式を採った。
+
+| 方法 | 可否 | 速度 | GUI | 判断 |
+| --- | --- | --- | --- | --- |
+| VMware Fusion で amd64 VM | 不可 | — | — | Apple Silicon では作れない |
+| UTM (QEMU の TCG エミュレーション) | 可 | 非常に遅い | あり | 通し検証には重すぎる |
+| **Docker の amd64 エミュレーション** | 可 | 遅いが実用的 | なし | **採用** |
+| x86_64 実機 | 可 | 速い | あり | 最終確認として残す |
+
+amd64 でしか確認できないのは `17-desktop-apps.sh` だけで、このモジュールが
+行うのは **deb のダウンロードと apt での導入** だけ。systemd も GNOME も
+dconf も使わないので、コンテナで検証範囲を十分に覆える。
+
+```bash
+./harness/vmtest amd64   # ゲストの Docker で amd64 の ubuntu:26.04 を動かす
+```
+
+`vmtest full` からも呼ばれる。中では次を行う。
+
+1. `tonistiigi/binfmt` で amd64 のエミュレーションを登録する (冪等)
+2. `--platform linux/amd64` の `ubuntu:26.04` コンテナを起動する
+3. コンテナ内で `./install.sh 17-desktop-apps.sh` を適用する
+4. 続けて `harness/asserts/17-desktop-apps.sh` を実行し、TAP で結果を出す
+
+コンテナでは確認できないのは「アプリを実際に起動してログインできるか」だけで、
+これは元々 [vm-testing.md](vm-testing.md) の手動チェックリストの項目。
 
 ### Docker は公式リポジトリ + docker グループ
 

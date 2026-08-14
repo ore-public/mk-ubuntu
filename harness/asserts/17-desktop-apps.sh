@@ -46,12 +46,17 @@ for d in discord.desktop Zoom.desktop 1password.desktop dropbox.desktop; do
     bash -c "test -f /usr/share/applications/${d}"
 done
 
-# 1Password は公式 apt リポジトリを keyring 方式で追加する
-check_file /etc/apt/keyrings/1password-archive-keyring.gpg
+# 1Password は導入後、パッケージ自身が apt リポジトリ定義を管理する。
+# こちらは足場を作るだけなので、確認するのは「パッケージ側の自動更新チャンネルが
+# 出来上がっていること」。
+check_file /usr/share/keyrings/1password-archive-keyring.gpg \
+  "1Password が自前の keyring を配置している"
 check_file /etc/apt/sources.list.d/1password.sources
 check_contains /etc/apt/sources.list.d/1password.sources \
-  "^Signed-By: /etc/apt/keyrings/1password-archive-keyring.gpg$" \
-  "1Password の sources が Signed-By で keyring を参照している"
+  "^Signed-By: /usr/share/keyrings/1password-archive-keyring.gpg$" \
+  "1Password の apt チャンネルがパッケージ管理下になっている"
+check "導入用の足場の keyring を残していない" \
+  test ! -f /etc/apt/keyrings/1password-archive-keyring.gpg
 
 # Dropbox はバージョン固定
 check_cmd_output "Dropbox が固定したバージョンである" "2026\.05\.06" \
