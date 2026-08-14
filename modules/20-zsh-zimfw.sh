@@ -38,6 +38,9 @@ install_skel_dotfiles() {
   install_file "${REPO_ROOT}/files/skel/.zshenv" "${SKEL}/.zshenv" 0644
   install_file "${REPO_ROOT}/files/skel/.zshrc" "${SKEL}/.zshrc" 0644
   install_file "${REPO_ROOT}/files/skel/.zimrc" "${SKEL}/.zimrc" 0644
+  # 個人用の受け皿 (管理下のファイルから読み込まれる)
+  install_file "${REPO_ROOT}/files/skel/.zshrc.local" "${SKEL}/.zshrc.local" 0644
+  install_file "${REPO_ROOT}/files/skel/.zimrc.local" "${SKEL}/.zimrc.local" 0644
 }
 
 # /etc/skel/.zim/modules に zimfw モジュールの実体 (git clone) を用意する。

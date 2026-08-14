@@ -25,6 +25,9 @@ GHOSTTY_DESKTOP_ID="com.mitchellh.ghostty.desktop"
 install_skel_config() {
   install_file "${REPO_ROOT}/files/skel/.config/ghostty/config" \
     /etc/skel/.config/ghostty/config 0644
+  # 個人用の受け皿 (config から ?config.local として読み込まれる)
+  install_file "${REPO_ROOT}/files/skel/.config/ghostty/config.local" \
+    /etc/skel/.config/ghostty/config.local 0644
 }
 
 # xdg-terminal-exec は XDG_CURRENT_DESKTOP に含まれるデスクトップ名ごとに

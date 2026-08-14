@@ -1,4 +1,9 @@
-# xremap の設定。/etc/skel から新規ユーザーへ配布される。
+# xremap の設定。
+#
+# ★ このファイルは install.sh を実行するたびに上書きされる。
+#    自分のリマップは同じディレクトリの config.local.yml に書くこと
+#    (そちらは上書きされない。内容はこのファイルに追加される)。
+#
 # 設定の書き方: https://github.com/xremap/xremap
 #
 # ターミナル (Ghostty / Ptyxis) はグローバルなリマップから除外している。

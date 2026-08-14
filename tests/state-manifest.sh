@@ -90,6 +90,21 @@ echo "=== GNOME 拡張 ==="
 hash_tree /usr/share/gnome-shell/extensions/xremap@k0kubun.com
 
 echo
+echo "=== 既存ユーザーへ配った管理ファイル ==="
+# 70-existing-users.sh が毎回上書きするので、2 回目の実行で内容が
+# 変わらないことをここで確かめる (個人ファイルは対象外)
+while IFS=: read -r _user _ _uid _ _ _home _shell; do
+  if [ "$_uid" -ge 1000 ] && [ "$_uid" -lt 60000 ] && [ -d "$_home" ]; then
+    for f in .zshenv .zshrc .zimrc \
+      .config/ghostty/config .config/xremap/config.yml \
+      .config/autostart/first-run-wizard.desktop \
+      .claude/skills/herdr-ops/SKILL.md; do
+      hash_path "${_home}/${f}"
+    done
+  fi
+done </etc/passwd
+
+echo
 echo "=== 導入済み apt パッケージ ==="
 dpkg-query -W -f='${binary:Package} ${Version}\n' 2>/dev/null | sort
 

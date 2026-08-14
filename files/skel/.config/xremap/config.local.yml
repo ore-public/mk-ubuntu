@@ -1,0 +1,16 @@
+# 個人用の xremap 設定。
+#
+# ~/.config/xremap/config.yml は install.sh を実行するたびに上書きされるので、
+# 自分のリマップはこのファイルに書く。このファイルは上書きされない。
+# ここに書いた modmap / keymap は config.yml のものに追加される。
+#
+# 変更を反映するには: systemctl --user restart xremap.service
+#
+# 例:
+#   keymap:
+#     - name: My Bindings
+#       remap:
+#         Alt-g: Ctrl-g
+
+modmap: []
+keymap: []

@@ -1,0 +1,36 @@
+#!/bin/sh
+#
+# xremap を起動するラッパー。
+#
+#   xremap-session <ホームディレクトリ>
+#
+# systemd ユニットからは %h を渡して呼ぶ (ユニットにホームを書かないため)。
+#
+# 管理下の config.yml に加えて、あれば個人用の config.local.yml も渡す。
+# xremap は 2 つ目以降のファイルの modmap / keymap / virtual_modifiers を
+# 1 つ目にマージする。存在しないファイルを渡すとエラーになるので、
+# ここで実在するものだけを並べる。
+#
+set -eu
+
+XREMAP=/usr/local/bin/xremap
+
+home="${1:-${HOME:-}}"
+if [ -z "$home" ]; then
+  echo "xremap-session: ホームディレクトリが分かりません" >&2
+  exit 1
+fi
+
+config="${home}/.config/xremap/config.yml"
+local_config="${home}/.config/xremap/config.local.yml"
+
+if [ ! -r "$config" ]; then
+  echo "xremap-session: 設定ファイルがありません: ${config}" >&2
+  exit 1
+fi
+
+if [ -r "$local_config" ]; then
+  exec "$XREMAP" --watch=device "$config" "$local_config"
+fi
+
+exec "$XREMAP" --watch=device "$config"

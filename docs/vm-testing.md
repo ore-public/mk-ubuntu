@@ -96,6 +96,7 @@ VM でも確認できるが、描画品質と打鍵感は実機の値と異な�
 ### ランチャー / Quick Look / スクリーンショット
 
 - [ ] F12 で Vicinae が開き、アプリ名を打つと起動できる
+- [ ] Vicinae の Clipboard History に、コピーした内容の履歴が並ぶ
 - [ ] Files でファイルを選んでスペースキーを押すとプレビューが出る (Quick Look)
 - [ ] Alt+Shift+3 で画面全体のスクリーンショットが撮れる
 - [ ] Alt+Shift+4 / Alt+Shift+5 で撮影パネルが出て範囲選択できる
@@ -159,6 +160,13 @@ VM でも確認できるが、描画品質と打鍵感は実機の値と異な�
 - [ ] Claude Code が herdr-ops スキルを認識する (`/herdr-ops` で呼べる)
 - [ ] herdr のペインで herdr-reviewr が開く
 - [ ] 2 回目以降のログインではウィザードが自動起動しない
+
+### 設定ファイルの持ち方
+
+- [ ] `~/.zshrc.local` にエイリアスを書いて再ログインすると効く
+- [ ] `~/.config/ghostty/config.local` に `font-size = 16` を書くと反映される
+- [ ] `~/.zshrc` を書き換えて `sudo ./install.sh` すると元に戻る
+      (書き換えは消えるが `~/.zshrc.local` は残る)
 
 ### 新規ユーザー
 

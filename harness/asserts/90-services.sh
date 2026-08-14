@@ -65,6 +65,12 @@ if command -v gdbus >/dev/null 2>&1; then
   fi
 fi
 
+# クリップボード履歴の拡張が実際に読み込まれていること
+if command -v gnome-extensions >/dev/null 2>&1; then
+  check_cmd_output "Vicinae のクリップボード拡張が ACTIVE" "State: ACTIVE" \
+    gnome-extensions info "vicinae@dagimg-dot"
+fi
+
 # Ubuntu が既定で有効にしている拡張を消していないこと
 # (enabled-extensions をシステム既定値で上書きする副作用の確認)
 if command -v gnome-extensions >/dev/null 2>&1; then

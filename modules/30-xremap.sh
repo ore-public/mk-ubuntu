@@ -141,6 +141,8 @@ EOF
 }
 
 install_systemd_unit() {
+  # ラッパーは config.local.yml の有無を見て引数を組み立てる
+  install_file "${REPO_ROOT}/files/bin/xremap-session" /usr/local/bin/xremap-session 0755
   install_file "${REPO_ROOT}/files/systemd/xremap.service" "$SYSTEMD_USER_UNIT" 0644
 
   # /etc/systemd/user/default.target.wants/ への symlink でシステム全体有効化する。
@@ -162,6 +164,9 @@ main() {
   install_binary
   install_file "${REPO_ROOT}/files/skel/.config/xremap/config.yml" \
     /etc/skel/.config/xremap/config.yml 0644
+  # 個人用の受け皿 (中身はコメントと空リストのひな形)
+  install_file "${REPO_ROOT}/files/skel/.config/xremap/config.local.yml" \
+    /etc/skel/.config/xremap/config.local.yml 0644
   install_gnome_extension
   setup_input_permissions
   install_systemd_unit

@@ -2,6 +2,9 @@
 # zimfw の設定ファイル。シェル起動時には読まれず、zimfw が読むだけ。
 # 変更したら次のシェル起動時に自動で init.zsh が作り直される。
 #
+# ★ このファイルは install.sh を実行するたびに上書きされる。
+#    追加したいモジュールは ~/.zimrc.local に書くこと (そちらは上書きされない)。
+#
 
 #
 # モジュール
@@ -52,3 +55,12 @@ zmodule zsh-users/zsh-syntax-highlighting
 zmodule zsh-users/zsh-history-substring-search
 # fish 風の入力補完 (グレー表示のサジェスト)
 zmodule zsh-users/zsh-autosuggestions
+
+#
+# 個人用のモジュール
+#
+
+# 自分で追加するモジュールは ~/.zimrc.local に書く
+if [[ -r ${ZDOTDIR:-${HOME}}/.zimrc.local ]]; then
+  source ${ZDOTDIR:-${HOME}}/.zimrc.local
+fi

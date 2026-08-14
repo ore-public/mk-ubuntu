@@ -11,11 +11,11 @@ ConditionPathExists=%h/.config/xremap/config.yml
 Type=simple
 # graphical-session.target 到達直後はまだ拡張の D-Bus 名が出ていないことがある
 ExecStartPre=/usr/bin/sleep 5
-# パスにユーザー名をハードコードせず %h (ユーザーのホーム) を使う。
-# --watch=device がないと、xremap の起動後に現れた入力デバイスを拾わない。
-# ログイン後に挿した USB キーボードや Bluetooth キーボードでリマップが
-# 効かなくなるので必ず付ける。
-ExecStart=/usr/local/bin/xremap --watch=device %h/.config/xremap/config.yml
+# パスにユーザー名をハードコードせず %h (ユーザーのホーム) を渡す。
+# ラッパーが config.yml と、あれば個人用の config.local.yml を並べて
+# xremap を起動する (--watch=device 付き。これがないと起動後に挿した
+# USB / Bluetooth キーボードでリマップが効かない)。
+ExecStart=/usr/local/bin/xremap-session %h
 Restart=always
 RestartSec=3
 

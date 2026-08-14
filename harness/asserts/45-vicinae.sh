@@ -19,6 +19,18 @@ check "共有ライブラリがすべて解決できる" \
 check "libopengl0 が導入済み" \
   bash -c "dpkg-query -W -f='\${Status}' libopengl0 2>/dev/null | grep -q '^install ok installed$'"
 
+# クリップボード履歴用の GNOME 拡張
+VICINAE_EXT_DIR="/usr/share/gnome-shell/extensions/vicinae@dagimg-dot"
+check_dir "$VICINAE_EXT_DIR"
+check_file "${VICINAE_EXT_DIR}/metadata.json"
+check_contains "${VICINAE_EXT_DIR}/metadata.json" "\"50\"" \
+  "Vicinae 拡張が GNOME 50 に対応している"
+# gschema を持つ拡張なので、コンパイル済みでないと設定を読めない
+check_file "${VICINAE_EXT_DIR}/schemas/gschemas.compiled" \
+  "Vicinae 拡張の gschema がコンパイル済み"
+check_cmd_output "dconf の enabled-extensions に Vicinae 拡張がある" "vicinae@dagimg-dot" \
+  gsettings get org.gnome.shell enabled-extensions
+
 # systemd ユーザーサービス
 check_file /etc/systemd/user/vicinae.service
 check "default.target.wants に symlink がある" \
@@ -64,6 +76,14 @@ export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 if systemctl --user is-active vicinae.service >/dev/null 2>&1; then
   pass "vicinae.service が active である"
   check "vicinae ping が通る" /usr/local/bin/vicinae ping
+  # 拡張が読み込まれていれば、サーバーは「拡張が無い」と言わなくなる
+  if journalctl --user -u vicinae.service -n 200 --no-pager 2>/dev/null |
+    grep -q "extension not installed or not running"; then
+    fail "Vicinae サーバーがクリップボード拡張を認識している"
+    diag "GNOME Shell の再ログイン後に拡張が読み込まれたか確認してください。"
+  else
+    pass "Vicinae サーバーがクリップボード拡張を認識している"
+  fi
 else
   fail "vicinae.service が active である"
   systemctl --user status vicinae.service --no-pager 2>&1 | head -n 15 |

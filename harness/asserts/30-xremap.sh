@@ -42,14 +42,20 @@ check_contains /etc/skel/.config/xremap/config.yml "com.mitchellh.ghostty" \
   "xremap 設定がターミナルを除外している"
 check_contains /etc/skel/.config/xremap/config.yml "Ctrl-p: Up" \
   "xremap 設定に Ctrl-p -> Up がある"
+check_contains /etc/skel/.config/xremap/config.yml "Alt-q: Alt-F4" \
+  "xremap 設定に Alt-q -> Alt-F4 がある"
 
 # systemd user unit
 check_file /etc/systemd/user/xremap.service
-check_contains /etc/systemd/user/xremap.service "ExecStart=/usr/local/bin/xremap .*%h/" \
-  "unit がホームを %h で参照している (ハードコードしていない)"
+check_contains /etc/systemd/user/xremap.service "^ExecStart=/usr/local/bin/xremap-session %h$" \
+  "unit がホームを %h で渡している (ハードコードしていない)"
+check "ラッパー xremap-session が実行可能" test -x /usr/local/bin/xremap-session
 # 起動後に挿したキーボードにもリマップを効かせるために必須
-check_contains /etc/systemd/user/xremap.service "\\-\\-watch=device" \
-  "unit が --watch=device を付けている"
+check_contains /usr/local/bin/xremap-session "\\-\\-watch=device" \
+  "ラッパーが --watch=device を付けている"
+check_contains /usr/local/bin/xremap-session "config\\.local\\.yml" \
+  "ラッパーが個人用の config.local.yml を読み込む"
+check_file /etc/skel/.config/xremap/config.local.yml
 check "unit に /home/ のハードコードがない" \
   bash -c "! grep -q '/home/' /etc/systemd/user/xremap.service"
 check_contains /etc/systemd/user/xremap.service "^Restart=always$" "unit に Restart=always がある"

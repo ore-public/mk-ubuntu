@@ -33,6 +33,13 @@ SYSTEMD_USER_WANTS="/etc/systemd/user/default.target.wants/vicinae.service"
 # 呼び出しキー。変更方法は README の「設計判断」節を参照。
 VICINAE_HOTKEY="F12"
 
+# クリップボード履歴とウィンドウ管理の API を Vicinae に渡す GNOME 拡張。
+# これがないと Vicinae はクリップボード履歴を扱えない。
+# extensions.gnome.org の配布物 (GNOME 46-50 対応) を同梱している。
+VICINAE_EXT_UUID="vicinae@dagimg-dot"
+VICINAE_EXT_ZIP="${REPO_ROOT}/files/gnome-extensions/vicinae@dagimg-dot.v1.7.0.shell-extension.zip"
+VICINAE_EXT_DIR="/usr/share/gnome-shell/extensions/${VICINAE_EXT_UUID}"
+
 install_vicinae() {
   if [ -f "$VICINAE_VERSION_STAMP" ] &&
     [ "$(cat "$VICINAE_VERSION_STAMP")" = "$VICINAE_VERSION" ] &&
@@ -92,6 +99,44 @@ install_systemd_unit() {
   systemctl daemon-reload || true
 }
 
+install_gnome_extension() {
+  [ -f "$VICINAE_EXT_ZIP" ] || die "同梱の GNOME 拡張が見つかりません: $VICINAE_EXT_ZIP"
+
+  local staged
+  staged="$(mktemp -d)"
+  unzip -q -o "$VICINAE_EXT_ZIP" -d "$staged"
+
+  # この拡張は gschema を持つ。extensions.gnome.org 経由の導入では
+  # インストーラがコンパイルするので、手で置く場合は自分でコンパイルする。
+  # (gschemas.compiled が無いと拡張の設定読み込みで失敗する)
+  if [ -d "${staged}/schemas" ]; then
+    glib-compile-schemas "${staged}/schemas" ||
+      { rm -rf "$staged"; die "GNOME 拡張の gschema のコンパイルに失敗しました。"; }
+  fi
+
+  if [ -d "$VICINAE_EXT_DIR" ] && diff -r -q "$staged" "$VICINAE_EXT_DIR" >/dev/null 2>&1; then
+    log "変更なし: $VICINAE_EXT_DIR"
+  else
+    rm -rf "$VICINAE_EXT_DIR"
+    install -d "$VICINAE_EXT_DIR"
+    cp -a "${staged}/." "$VICINAE_EXT_DIR/"
+    chmod -R a+rX "$VICINAE_EXT_DIR"
+    log "配置: $VICINAE_EXT_DIR"
+  fi
+  rm -rf "$staged"
+
+  local shell_major
+  if command -v gnome-shell >/dev/null 2>&1; then
+    shell_major="$(gnome-shell --version 2>/dev/null | grep -oE '[0-9]+' | head -n 1)"
+    if [ -n "$shell_major" ] &&
+      ! grep -q "\"${shell_major}\"" "${VICINAE_EXT_DIR}/metadata.json"; then
+      warn "同梱の Vicinae 拡張は GNOME ${shell_major} に対応していない可能性があります。"
+    fi
+  fi
+
+  dconf_enable_extension "$VICINAE_EXT_UUID"
+}
+
 set_hotkey() {
   dconf_set_custom_keybinding "vicinae" "Vicinae" "vicinae toggle" "$VICINAE_HOTKEY"
   dconf_update
@@ -108,10 +153,12 @@ main() {
   install_vicinae
   install_wrapper
   install_systemd_unit
+  install_gnome_extension
   set_hotkey
 
   log "Vicinae ${VICINAE_VERSION}: $("$VICINAE_BIN" version 2>/dev/null | head -n 1 || echo 'バージョン取得失敗')"
   log "呼び出しキー: ${VICINAE_HOTKEY}"
+  log "クリップボード履歴: GNOME 拡張 ${VICINAE_EXT_UUID} を有効化しました"
   log "反映にはログアウトとログインが必要です。"
 }
 

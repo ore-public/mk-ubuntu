@@ -1,0 +1,12 @@
+# 個人用の Ghostty 設定。
+#
+# ~/.config/ghostty/config は install.sh を実行するたびに上書きされるので、
+# 自分の設定はこのファイルに書く。このファイルは上書きされない。
+# ここに書いた値が config の値より優先される。
+#
+# 設定キーの一覧: https://ghostty.org/docs/config/reference
+#
+# 例:
+#   font-size = 14
+#   theme = Catppuccin Mocha
+#   background-opacity = 0.95

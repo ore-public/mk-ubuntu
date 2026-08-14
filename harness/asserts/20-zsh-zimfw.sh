@@ -13,6 +13,8 @@ check_file /usr/local/share/zimfw/zimfw.zsh
 check_file /etc/skel/.zshenv
 check_file /etc/skel/.zshrc
 check_file /etc/skel/.zimrc
+check_file /etc/skel/.zshrc.local
+check_file /etc/skel/.zimrc.local
 
 # システム側の compinit を止めて zimfw の completion モジュールに任せる
 check_contains /etc/skel/.zshenv "^skip_global_compinit=1$" \

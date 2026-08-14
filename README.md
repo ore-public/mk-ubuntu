@@ -89,6 +89,35 @@ sudo ./install.sh
 完了したら再起動する。dconf のシステム既定値・GNOME 拡張・systemd ユーザーサービスは
 再ログインで反映される。
 
+### 設定ファイルの持ち方 (重要)
+
+このリポジトリが配る設定ファイルは **2 種類**に分かれる。
+
+| 種類 | 例 | 挙動 |
+| --- | --- | --- |
+| **管理ファイル** | `~/.zshrc` `~/.zimrc` `~/.config/ghostty/config` `~/.config/xremap/config.yml` | **`install.sh` のたびに上書きされる** |
+| **個人ファイル** | `~/.zshrc.local` `~/.zimrc.local` `~/.config/ghostty/config.local` `~/.config/xremap/config.local.yml` | **一度作られたら二度と触られない** |
+
+**自分の設定は必ず個人ファイル (`*.local`) の側に書く。**
+管理ファイルを直接編集しても、次に `install.sh` を実行した時点で消える。
+
+こうしている理由は、**このリポジトリを更新して運用中の PC で再実行したときに、
+変更が確実に行き渡るようにするため**。管理ファイルを「既にあるものは触らない」に
+すると、一度セットアップした PC には更新が永久に届かなくなる。
+
+管理ファイルからは必ず対応する個人ファイルを読み込むようにしてあるので、
+上書きされても個人の設定は失われない。読み込みは管理ファイルの最後に行うため、
+個人ファイル側の値が優先される。
+
+| 個人ファイル | 読み込まれ方 |
+| --- | --- |
+| `~/.zshrc.local` | `~/.zshrc` の末尾で `source` |
+| `~/.zimrc.local` | `~/.zimrc` の末尾で `source` (`zmodule` をそのまま書ける) |
+| `~/.config/ghostty/config.local` | `config` の `config-file = ?config.local` |
+| `~/.config/xremap/config.local.yml` | systemd から xremap に 2 つ目の設定として渡す |
+
+xremap の個人設定を変えたら `systemctl --user restart xremap.service` で反映する。
+
 > **既にある自分のアカウントで zsh を使うには `chsh` が要る。**
 > `install.sh` は既存ユーザーのログインシェルを勝手に変えない
 > (意図せずシェルが変わるのを避けるため)。zsh + zimfw の体験を得るには
@@ -163,7 +192,8 @@ application-list=['com.mitchellh.ghostty.desktop:1', 'brave-browser.desktop:2', 
 
 ### ランチャー (Vicinae)
 
-**F12** で Vicinae が開く。アプリ起動、ファイル検索、計算などを 1 か所から行える
+**F12** で Vicinae が開く。アプリ起動、ファイル検索、計算、
+**クリップボード履歴**などを 1 か所から行える
 (macOS の Spotlight / Alfred 相当)。
 
 呼び出しキーの変更方法:
@@ -179,8 +209,10 @@ application-list=['com.mitchellh.ghostty.desktop:1', 'brave-browser.desktop:2', 
 > 開発者ツールは Ctrl+Shift+I を使うか、上記の方法でキーを変更する。
 
 Vicinae は `vicinae.service` (systemd ユーザーサービス) として常駐する。
-クリップボード履歴を使いたい場合は Vicinae 用の GNOME 拡張
-(`vicinae@dagimg-dot`) が別途必要になる。本リポジトリでは導入していない。
+
+クリップボード履歴は Vicinae 単体では動かず、GNOME 拡張
+`vicinae@dagimg-dot` が必要になる (Wayland ではクリップボードの監視に
+Shell 側の協力が要るため)。この拡張も同梱して有効化している。
 
 ### Quick Look
 
@@ -303,6 +335,36 @@ extensions.gnome.org の配布物 (v15、GNOME 45〜50 対応) をリポジト�
 実行時の `gsettings get` の値と追加したい UUID の**和集合**を取り、
 `/etc/dconf/db/local.d/30-extensions` の 1 ファイルだけに書き込む。
 和集合をソートして書くので、何度実行しても結果は同じ。
+
+### 管理ファイルは毎回上書きし、個人設定は別ファイルに分ける
+
+当初は既存ユーザーへの配布を「まだ無いファイルだけコピーする」方式にしていたが、
+**それだと一度セットアップした PC にこのリポジトリの更新が二度と届かない**。
+`.zshrc` を改善しても、既に `.zshrc` を持っている PC では無視されてしまう。
+
+そこで配布物を管理ファイルと個人ファイルに分けた。
+
+- **管理ファイル**: 毎回そのまま上書きする。更新が確実に行き渡る。
+- **個人ファイル** (`*.local`): 無いときだけ作り、以後は触らない。
+
+管理ファイルからは必ず対応する個人ファイルを読み込む。読み込みは末尾で行うので、
+個人ファイル側の値が優先される。どの読み込み方も実機で確認した:
+
+- `~/.zshrc` → `source ~/.zshrc.local`
+- `~/.zimrc` → `source ~/.zimrc.local` (`zmodule` がそのまま使える)
+- `~/.config/ghostty/config` → `config-file = ?config.local`
+  (`?` は「ファイルが無くてもエラーにしない」。`?` を付けないと
+  Ghostty が起動のたびに Configuration Errors ダイアログを出す)
+- `~/.config/xremap/config.yml` → systemd から `xremap-session` ラッパー経由で
+  2 つ目の設定ファイルとして渡す。xremap は 2 つ目以降の `modmap` / `keymap` を
+  1 つ目にマージする。存在しないファイルを渡すとエラーになるため、
+  ラッパーが実在するものだけを並べる
+
+`~/.zim/modules` は git clone した実体であって設定ではないので、
+上書き対象からは外し、不足分を補うだけにしている。
+
+`harness/asserts/72-managed-files.sh` が、実際にホームのファイルを書き換えてから
+再実行し、管理ファイルが元に戻ること・個人ファイルが残ることを確認する。
 
 ### /etc/skel は既存ユーザーには届かないので、別モジュールで配る
 

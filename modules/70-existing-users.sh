@@ -4,15 +4,21 @@
 #
 # /etc/skel が効くのは「これから作られるユーザー」だけなので、
 # install.sh を実行した本人を含む既存ユーザーには何も届かない。
-# 実際、xremap の systemd ユニットは ConditionPathExists で
-# ~/.config/xremap/config.yml を要求するため、これがないと起動すらしない。
+# このモジュールが /etc/skel の内容を既存ユーザーのホームに配る。
 #
-# このモジュールは既存ユーザーに対して次を行う:
-#   1. /etc/skel のうち「まだ存在しないファイル」だけを配る (既存の設定は壊さない)
-#   2. xremap が入力デバイスを読めるよう input グループに追加する
+# 配り方は 2 種類に分かれる:
 #
-# ログインシェルの変更だけは行わず、chsh の案内にとどめる
-# (利用者が意図せずシェルを変えられるのを避けるため)。
+#   管理ファイル … 毎回そのまま上書きする。
+#                  こうしないと、このリポジトリを更新して再実行しても
+#                  運用中の PC に変更が反映されない。
+#   個人ファイル … 無いときだけ作る。以後は一切触らない。
+#                  利用者はこちらに自分の設定を書く。
+#
+# どのファイルが個人ファイルかは PERSONAL_FILES で定義する。
+# 管理ファイル側からは必ず対応する個人ファイルを読み込むようにしてあるので、
+# 上書きされても利用者の設定は失われない。
+#
+# ログインシェルの変更だけは行わず、chsh の案内にとどめる。
 #
 set -euo pipefail
 
@@ -21,6 +27,40 @@ MODULE_NAME="70-existing-users"
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/lib/common.sh"
 
 SKEL=/etc/skel
+
+# 個人ファイル (/etc/skel からの相対パス)。
+# 無いときだけ作り、以後は上書きしない。
+PERSONAL_FILES=(
+  ".zshrc.local"
+  ".zimrc.local"
+  ".config/ghostty/config.local"
+  ".config/xremap/config.local.yml"
+)
+
+# 上書きの対象にしないディレクトリ (/etc/skel からの相対パス)。
+# .zim/modules は git clone した実体で設定ではないため、
+# 不足分を補うだけにして毎回コピーし直さない。
+SEED_ONLY_DIRS=(
+  ".zim"
+)
+
+is_personal_file() {
+  local rel="$1" p
+  for p in "${PERSONAL_FILES[@]}"; do
+    [ "$rel" = "$p" ] && return 0
+  done
+  return 1
+}
+
+is_seed_only() {
+  local rel="$1" d
+  for d in "${SEED_ONLY_DIRS[@]}"; do
+    case "$rel" in
+      "$d" | "$d"/*) return 0 ;;
+    esac
+  done
+  return 1
+}
 
 # 対象は通常のログインユーザー (UID 1000-59999) でホームがあるもの
 list_regular_users() {
@@ -35,31 +75,55 @@ list_regular_users() {
   done </etc/passwd
 }
 
-# /etc/skel の内容のうち、まだ存在しないものだけをコピーする。
+# copy_as_user <ユーザー> <コピー元> <コピー先>
 # 対象ユーザー自身として実行することで所有者が自動的に正しくなる。
-seed_skel_into_home() {
-  local user="$1" home="$2" before after
-
-  before="$(sudo_count_files "$home")"
-
-  # --update=none は「既にあるものは上書きしない」。
-  # GNU coreutils 9.3 以降で使える (-n は非推奨の警告が出る)。
-  if ! runuser -u "$user" -- \
-    cp -r --update=none --preserve=mode,timestamps "${SKEL}/." "${home}/"; then
-    warn "${user} のホームへの配布に失敗しました。"
-    return 0
-  fi
-
-  after="$(sudo_count_files "$home")"
-  if [ "$before" -eq "$after" ]; then
-    log "変更なし: ${home} (配布済み)"
-  else
-    log "配布: ${home} に $((after - before)) 個のファイルを追加しました"
-  fi
+copy_as_user() {
+  local user="$1" src="$2" dest="$3"
+  runuser -u "$user" -- install -d "$(dirname "$dest")"
+  runuser -u "$user" -- cp --preserve=mode "$src" "$dest"
 }
 
-sudo_count_files() {
-  find "$1" -type f 2>/dev/null | wc -l
+seed_skel_into_home() {
+  local user="$1" home="$2"
+  local rel src dest updated=0 created=0 kept=0
+
+  while IFS= read -r rel; do
+    src="${SKEL}/${rel}"
+    dest="${home}/${rel}"
+
+    if is_seed_only "$rel"; then
+      # 不足しているものだけ補う
+      if [ ! -e "$dest" ]; then
+        copy_as_user "$user" "$src" "$dest"
+        created=$((created + 1))
+      fi
+      continue
+    fi
+
+    if is_personal_file "$rel"; then
+      # 個人ファイル: 無いときだけ作る
+      if [ ! -e "$dest" ]; then
+        copy_as_user "$user" "$src" "$dest"
+        created=$((created + 1))
+      else
+        kept=$((kept + 1))
+      fi
+      continue
+    fi
+
+    # 管理ファイル: 毎回そのまま上書きする
+    if [ -f "$dest" ] && cmp -s "$src" "$dest"; then
+      continue
+    fi
+    copy_as_user "$user" "$src" "$dest"
+    updated=$((updated + 1))
+  done < <(cd "$SKEL" && find . -type f -printf '%P\n' | sort)
+
+  if [ "$updated" -eq 0 ] && [ "$created" -eq 0 ]; then
+    log "変更なし: ${home} (管理ファイルは最新、個人ファイル ${kept} 個は保持)"
+  else
+    log "配布: ${home} (管理ファイル更新 ${updated} 個 / 新規作成 ${created} 個 / 個人ファイル保持 ${kept} 個)"
+  fi
 }
 
 add_to_input_group() {
@@ -94,10 +158,16 @@ main() {
 
   if [ "$count" -eq 0 ]; then
     log "対象となる既存ユーザーはいませんでした。"
-  else
-    log "既存ユーザー ${count} 人に設定を配布しました。"
-    log "既に同名のファイルがある場合は上書きしていません。"
+    return 0
   fi
+
+  log "既存ユーザー ${count} 人に設定を配布しました。"
+  log "管理ファイル (.zshrc など) は毎回上書きします。"
+  log "個人の設定は次のファイルに書いてください (上書きされません):"
+  local p
+  for p in "${PERSONAL_FILES[@]}"; do
+    log "  ~/${p}"
+  done
 }
 
 main "$@"

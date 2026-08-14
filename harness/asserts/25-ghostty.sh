@@ -10,6 +10,10 @@ check_contains /etc/skel/.config/ghostty/config "^keybind = alt\+c=copy_to_clipb
 check_contains /etc/skel/.config/ghostty/config "^keybind = alt\+v=paste_from_clipboard$" \
   "Ghostty の設定に alt+v=paste_from_clipboard がある"
 
+check_file /etc/skel/.config/ghostty/config.local
+check_contains /etc/skel/.config/ghostty/config "^config-file = \?config\.local$" \
+  "Ghostty の設定が個人用 config.local を任意読み込みする"
+
 check_file /usr/share/applications/com.mitchellh.ghostty.desktop
 
 # 既定ターミナル: xdg-terminal-exec が読む 3 種類のリスト
