@@ -2,7 +2,7 @@
 Type=Application
 Name=AI エージェント初回セットアップ
 Comment=Claude Code / Copilot CLI / opencode の認証と、Playwright MCP・herdr 連携の初期設定
-Exec=ghostty --title=AI エージェント初回セットアップ -e /usr/local/bin/first-run-wizard
+Exec=ghostty "--title=AI エージェント初回セットアップ" -e /usr/local/bin/first-run-wizard
 Icon=utilities-terminal
 Terminal=false
 X-GNOME-Autostart-enabled=true

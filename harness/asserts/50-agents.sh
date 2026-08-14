@@ -32,9 +32,11 @@ check_file /etc/skel/.config/autostart/first-run-wizard.desktop
 check_contains /etc/skel/.config/autostart/first-run-wizard.desktop \
   "^Exec=ghostty .*-e /usr/local/bin/first-run-wizard$" \
   "自動起動 .desktop が Ghostty でウィザードを開く"
+# .desktop の Exec は空白で引数が分割されるため、空白を含む引数は
+# 二重引用符で囲む必要がある (囲まないと Ghostty が設定エラーを出す)
 check_contains /etc/skel/.config/autostart/first-run-wizard.desktop \
-  "^Exec=ghostty --title=" \
-  "自動起動 .desktop がウィンドウタイトルを指定している"
+  '^Exec=ghostty "--title=[^"]+"' \
+  "自動起動 .desktop のタイトル指定が二重引用符で囲まれている"
 
 # 認証情報が焼き込まれていないこと
 check "リポジトリ由来の設定に API キーが含まれていない" \

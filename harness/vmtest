@@ -359,6 +359,10 @@ cmd_shots() {
   log "レベル 2: Brave を起動してワークスペース 2 への自動配置を撮ります"
   guest_gui_run "shot-brave" "brave-browser --password-store=basic --no-first-run"
   sleep 20
+  # Auto Move Windows は別のワークスペースへ移すだけで表示は切り替えないので、
+  # Ctrl+2 を実際に打って移動する (ワークスペース移動キーの確認も兼ねる)
+  guest_key "29:1 3:1 3:0 29:0"
+  sleep 4
   cmd_shot "03-brave-workspace2" || true
 
   log "レベル 2: F12 で Vicinae が開くところを撮ります"
