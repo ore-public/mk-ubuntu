@@ -30,8 +30,11 @@ check "gh がある" bash -c "command -v gh"
 check "first-run-wizard が実行可能" test -x /usr/local/bin/first-run-wizard
 check_file /etc/skel/.config/autostart/first-run-wizard.desktop
 check_contains /etc/skel/.config/autostart/first-run-wizard.desktop \
-  "^Exec=ghostty -e /usr/local/bin/first-run-wizard$" \
+  "^Exec=ghostty .*-e /usr/local/bin/first-run-wizard$" \
   "自動起動 .desktop が Ghostty でウィザードを開く"
+check_contains /etc/skel/.config/autostart/first-run-wizard.desktop \
+  "^Exec=ghostty --title=" \
+  "自動起動 .desktop がウィンドウタイトルを指定している"
 
 # 認証情報が焼き込まれていないこと
 check "リポジトリ由来の設定に API キーが含まれていない" \
