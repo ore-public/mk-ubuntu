@@ -521,8 +521,36 @@ gem のコンパイルにはヘッダが要る**ので、ruby-build の
 (`libreadline6-dev` / `libncurses5-dev` / `libgdbm6` は 26.04 には無く、
 `libreadline-dev` / `libncurses-dev` / `libgdbm-dev` が正)。
 
-PHP をソースからビルドする場合はさらに別のパッケージが要る。
-必要になった時点で `58-mise.sh` の依存一覧に足す。
+#### PHP のビルド依存はプラグインの宣言だけでは足りない
+
+mise の PHP は必ずソースからビルドする (vfox-php プラグイン)。
+プラグインは `PLUGIN.systemDependencies` で必要な apt パッケージを宣言しているが、
+**その宣言どおりに入れるとビルドが失敗する**。
+
+`configure_linux()` の実装が次のようになっているため:
+
+```lua
+local gd_check = os.execute("pkg-config --exists libpng 2>/dev/null")
+if gd_check == 0 or gd_check == true then
+    configureOptions = configureOptions .. " --with-external-gd"
+end
+```
+
+宣言にある `libpng-dev` を入れると `--with-external-gd` が自動で有効になり、
+その時点で **宣言にない `gdlib.pc` (`libgd-dev`)** が必要になる。
+実機で PHP 8.1 をビルドして判明した。
+
+エラーを 1 つずつ潰すのではなく configure の全引数を読んで確認した結果、
+Linux で必要なのは `libgd-dev` の追加だけだった。
+
+- `--enable-intl` → `libicu-dev`、`--enable-dba` → `libdb-dev`、
+  `--enable-soap` → `libxml2-dev`、`--with-zip` → `libzip-dev` はいずれも導入済み
+- `--with-pdo-pgsql` は `pg_config` があるときだけ有効になるので不要
+- `--with-bz2` は macOS 側の分岐にしかないので不要
+
+検証結果: PHP 8.1.34 のビルドが arm64 VM で 2 分 46 秒で完了し、
+`curl` `gd` `intl` `mbstring` `openssl` `sqlite3` `zip` が有効。
+Composer も自動で入る。
 
 #### システムの Node.js と mise の関係
 

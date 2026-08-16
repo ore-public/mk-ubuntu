@@ -26,6 +26,28 @@ for p in autoconf patch build-essential rustc libssl-dev libyaml-dev \
     bash -c "dpkg-query -W -f='\${Status}' '${p}' 2>/dev/null | grep -q '^install ok installed$'"
 done
 
+# PHP のソースビルドに必要なパッケージ (vfox-php の systemDependencies 相当)
+for p in bison re2c libxml2-dev libonig-dev libicu-dev libzip-dev \
+  libcurl4-openssl-dev libsqlite3-dev libpng-dev libgd-dev libfreetype-dev \
+  libjpeg-dev libwebp-dev libsodium-dev; do
+  check "PHP ビルド依存が導入済み: ${p}" \
+    bash -c "dpkg-query -W -f='\${Status}' '${p}' 2>/dev/null | grep -q '^install ok installed$'"
+done
+
+# Node.js のネイティブモジュール / ソースビルド用
+for p in python3 g++ make; do
+  check "Node ビルド依存が導入済み: ${p}" \
+    bash -c "dpkg-query -W -f='\${Status}' '${p}' 2>/dev/null | grep -q '^install ok installed$'"
+done
+
+# --with-external-gd が有効になると gdlib.pc が要る
+check_cmd_output "gdlib の pkg-config が引ける" "^[0-9]" \
+  bash -c "pkg-config --modversion gdlib"
+
+# PHP のビルドに必須の bison はバージョン 3 以上が要る
+check_cmd_output "bison が 3.0 以上" "^bison \(GNU Bison\) [3-9]\." \
+  bash -c "bison --version | head -1"
+
 # シェルでの有効化
 check_contains /etc/skel/.zshrc "mise activate zsh" \
   "/etc/skel/.zshrc が mise を有効化する"

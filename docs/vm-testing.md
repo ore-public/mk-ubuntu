@@ -174,6 +174,8 @@ VM でも確認できるが、描画品質と打鍵感は実機の値と異な�
 - [ ] そのディレクトリを出るとシステムの状態に戻る
 - [ ] `mise use node@22` を書いたディレクトリでも `claude` が動く
 - [ ] ネイティブ拡張を持つ gem (nokogiri など) が `gem install` できる
+- [ ] `mise use -g php@8.1` がビルドを完走し、`php -v` が通る
+- [ ] `php -m` に gd / intl / mbstring / curl / openssl / zip がある
 
 ### 設定ファイルの持ち方
 
