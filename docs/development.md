@@ -395,10 +395,30 @@ extensions.gnome.org を探しても、これを補う拡張は見当たらな�
   行き先に着くまで数回だけ確認し直す
 - 割当表に載っているアプリだけが対象。他のウィンドウでは画面を動かさない
 
-**これはこのリポジトリで保守する自作コード**である。GNOME の拡張 API は
-メジャーバージョンごとに変わるため、GNOME 51 以降へ上げるときは追随が要る。
-`40-gnome-workspaces.sh` は metadata.json の対応バージョンが
-実行中の GNOME と合わないときに警告を出す。
+**これはこのリポジトリで保守する自作コード**である。既製の拡張が無いことを
+確認したうえで、維持コストを承知で自作すると決めた (確認済みの判断であり、
+見落としではない)。
+
+GNOME の拡張 API はメジャーバージョンごとに変わるため、GNOME を上げるときは
+追随が要る。気づけるように 2 段構えにしてある。
+
+- `40-gnome-workspaces.sh` が、metadata.json の対応バージョンと
+  実行中の GNOME が食い違うときに警告を出す
+- `harness/asserts/` が、**実行中の GNOME のメジャーバージョン**を
+  metadata.json が宣言しているかを検証する
+  (バージョンを直書きしていないので、GNOME が上がると自動的に落ちる)
+
+#### GNOME を上げるときの手順
+
+1. `vmtest full` を実行する。対応していない拡張があればアサーションが落ちる
+2. 自作拡張 (`files/gnome-extensions/follow-moved-windows@mk-ubuntu/`) は
+   `metadata.json` の `shell-version` に新しい番号を足し、
+   `extension.js` が新しい API で動くかを確認する。
+   主に使っているのは `global.display` の `window-created`、
+   `Shell.WindowTracker`、`Main.activateWindow()`、`Gio.Settings`
+3. 同梱している他の拡張 (xremap / Vicinae) は上流が対応した版に差し替える。
+   zip を取り直して SHA256 を更新する
+4. `vmtest full` が通ることを確認してからコミットする
 
 #### `Meta.Window.activate()` ではワークスペースが切り替わらない
 

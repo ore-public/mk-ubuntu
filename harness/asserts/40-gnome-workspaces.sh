@@ -46,8 +46,7 @@ FOLLOW_DIR="/usr/share/gnome-shell/extensions/${FOLLOW_UUID}"
 check_dir "$FOLLOW_DIR"
 check_file "${FOLLOW_DIR}/metadata.json"
 check_file "${FOLLOW_DIR}/extension.js"
-check_contains "${FOLLOW_DIR}/metadata.json" "\"50\"" \
-  "自作拡張が GNOME 50 に対応している"
+check_extension_supports_current_shell "${FOLLOW_DIR}/metadata.json" "自作拡張 (Follow Moved Windows)"
 check_cmd_output "enabled-extensions に自作拡張がある" "$FOLLOW_UUID" \
   gsettings get org.gnome.shell enabled-extensions
 

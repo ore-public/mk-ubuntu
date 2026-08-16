@@ -23,8 +23,7 @@ check "libopengl0 が導入済み" \
 VICINAE_EXT_DIR="/usr/share/gnome-shell/extensions/vicinae@dagimg-dot"
 check_dir "$VICINAE_EXT_DIR"
 check_file "${VICINAE_EXT_DIR}/metadata.json"
-check_contains "${VICINAE_EXT_DIR}/metadata.json" "\"50\"" \
-  "Vicinae 拡張が GNOME 50 に対応している"
+check_extension_supports_current_shell "${VICINAE_EXT_DIR}/metadata.json" "Vicinae 拡張"
 # gschema を持つ拡張なので、コンパイル済みでないと設定を読めない
 check_file "${VICINAE_EXT_DIR}/schemas/gschemas.compiled" \
   "Vicinae 拡張の gschema がコンパイル済み"

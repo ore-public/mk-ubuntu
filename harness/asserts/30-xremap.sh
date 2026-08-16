@@ -16,8 +16,7 @@ check_cmd_output "xremap のバージョンが ${XREMAP_VERSION} である" "$XR
 check_dir "$EXT_DIR"
 check_file "${EXT_DIR}/metadata.json"
 check_file "${EXT_DIR}/extension.js"
-check_contains "${EXT_DIR}/metadata.json" "\"50\"" \
-  "xremap 拡張が GNOME 50 に対応している"
+check_extension_supports_current_shell "${EXT_DIR}/metadata.json" "xremap 拡張"
 check_cmd_output "dconf の enabled-extensions に xremap がある" "$EXT_UUID" \
   gsettings get org.gnome.shell enabled-extensions
 

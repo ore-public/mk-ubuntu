@@ -72,5 +72,33 @@ check_cmd_output() {
   return 0
 }
 
+# check_extension_supports_current_shell <metadata.json のパス> <拡張の名前>
+# 実行中の GNOME Shell のメジャーバージョンを metadata.json が宣言しているか見る。
+# バージョンを直書きすると、GNOME が上がったときに古いままでも素通りしてしまう。
+# ここが落ちることが「拡張を新しい GNOME に追随させる」合図になる。
+check_extension_supports_current_shell() {
+  local metadata="$1" label="$2" major
+  major="$(gnome-shell --version 2>/dev/null | grep -oE '[0-9]+' | head -n 1)"
+
+  if [ -z "$major" ]; then
+    diag "gnome-shell のバージョンを取得できないため、${label} の対応確認をスキップします。"
+    return 0
+  fi
+
+  if [ ! -f "$metadata" ]; then
+    fail "${label}が GNOME ${major} に対応している"
+    diag "metadata.json がありません: ${metadata}"
+    return 0
+  fi
+
+  if grep -q "\"${major}\"" "$metadata"; then
+    pass "${label}が GNOME ${major} に対応している"
+  else
+    fail "${label}が GNOME ${major} に対応している"
+    diag "metadata.json の shell-version に ${major} がありません。"
+    diag "GNOME の更新に追随して拡張を差し替える必要があります。"
+  fi
+}
+
 # 各スクリプトの末尾で呼ぶ
 assert_exit() { exit "$ASSERT_FAILED"; }
