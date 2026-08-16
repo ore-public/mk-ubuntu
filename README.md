@@ -27,6 +27,7 @@ sudo ./install.sh
 | **AI エージェント** | Claude Code / GitHub Copilot CLI / opencode / herdr |
 | **アプリ** | Discord / Zoom / 1Password / Dropbox (公式配布版) |
 | **コンテナ** | Docker Engine と Docker Compose (Docker 公式版) |
+| **言語バージョン管理** | mise (Ruby / Node.js / PHP などをプロジェクト単位で切替) |
 
 ---
 
@@ -215,6 +216,28 @@ application-list=['brave-browser.desktop:1', 'com.mitchellh.ghostty.desktop:6', 
 - コマンドの色分け表示
 - `bat` でファイルを色付き表示できます
 
+### 言語バージョンの切り替え (mise)
+
+Ruby / Node.js / PHP などをプロジェクトごとに切り替えられます。
+
+```bash
+mise use -g ruby@3.4       # 全体で使う Ruby を決める
+mise use ruby@3.4          # このディレクトリだけ (mise.toml が作られる)
+mise use node@22 php@8.4   # 他の言語も同じ書き方
+mise ls                    # 入っているものを見る
+```
+
+Ruby はビルド済みバイナリがあればそれを使い、無ければソースからビルドします。
+ビルドに必要な apt パッケージは導入済みです。
+
+> **バージョンを指定していないディレクトリでは、システムのコマンドがそのまま使われます。**
+> mise は `mise.toml` や `.tool-versions` で指定したものだけを差し替えます。
+
+> **注意:** AI エージェント (`claude` など) はシステムの Node.js で動いています。
+> mise であるプロジェクトに古い Node.js を指定すると、そのディレクトリでは
+> エージェントが動かなくなることがあります。その場合はプロジェクトの
+> Node.js を 22 以上にするか、別のディレクトリでエージェントを起動してください。
+
 ### AI エージェント
 
 ターミナルから次のコマンドが使えます。
@@ -249,7 +272,8 @@ apt から入るもののほか、次を特定のバージョンで導入しま�
 | Claude Code | 2.1.231 |
 | GitHub Copilot CLI | 1.0.79 |
 | opencode | 1.18.18 |
-| Node.js | Ubuntu の 22 系 |
+| Node.js (システム) | Ubuntu の 22 系 |
+| mise (言語バージョン管理) | v2026.8.6 |
 
 ダウンロードするものは、バージョンを固定できるものはチェックサムを検証し、
 「最新版」しか配布されていないものは公式サイトの HTTPS と

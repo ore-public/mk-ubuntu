@@ -25,6 +25,7 @@ modules/                機能単位のスクリプト。番号プレフィッ�
   45-vicinae.sh           ランチャー Vicinae とクリップボード履歴の拡張
   50-herdr.sh             herdr
   55-docker.sh            Docker Engine (Docker 公式リポジトリ)
+  58-mise.sh              mise と Ruby のビルド依存
   60-agents.sh            Node.js と AI エージェント各種、初回ウィザード
   65-agent-tooling.sh     Playwright MCP、共有ブラウザ、herdr 操作スキル
   70-existing-users.sh    既存ユーザーへの設定配布と input グループ追加
@@ -500,6 +501,42 @@ GNOME の仕様であって本リポジトリの不具合ではないが、
 - `Restart=always`
 - `/etc/systemd/user/default.target.wants/xremap.service` へのシンボリックリンクで
   システム全体を有効化する (各ユーザーが `systemctl --user enable` しなくてよい)
+
+### 言語バージョン管理は rbenv ではなく mise
+
+当初は Ruby 用に rbenv + ruby-build を入れる方針だったが、
+Ruby だけでなく Node.js や PHP も切り替えたいので **mise** に一本化した。
+言語ごとに `*env` を並べるより管理対象が少なくて済む。
+
+- 本体はシステム共有の `/usr/local/bin/mise` (バージョン固定 + SHA256 検証)。
+  amd64 / arm64 の両方が配布されているのでアーキ分岐で対応する
+- 導入した言語は**ユーザーごと** (`~/.local/share/mise`) に持つ
+- 有効化は `/etc/skel/.zshrc` の `mise activate zsh`
+
+Ruby は mise がビルド済みバイナリを使い、無ければ ruby-build で
+ソースからビルドする。**ビルド済みを使う場合でも、ネイティブ拡張を持つ
+gem のコンパイルにはヘッダが要る**ので、ruby-build の
+「Suggested build environment」相当を apt で入れている。
+パッケージ名は 26.04 の実環境に合わせた
+(`libreadline6-dev` / `libncurses5-dev` / `libgdbm6` は 26.04 には無く、
+`libreadline-dev` / `libncurses-dev` / `libgdbm-dev` が正)。
+
+PHP をソースからビルドする場合はさらに別のパッケージが要る。
+必要になった時点で `58-mise.sh` の依存一覧に足す。
+
+#### システムの Node.js と mise の関係
+
+AI エージェント (`claude` / `copilot` / `playwright-mcp`) は
+**システムの Node.js** に npm でグローバル導入している。
+これらの実行ファイルは `#!/usr/bin/env node` なので、mise が
+プロジェクトに別の Node.js を割り当てているディレクトリでは
+そちらの Node.js で動くことになる。指定が 22 未満だと
+Claude Code は起動しない。
+
+mise は `mise.toml` や `.tool-versions` で指定したものしか PATH に入れないため、
+既定では影響しない。この挙動は
+`harness/asserts/58-mise.sh` で「設定のないディレクトリでは
+システムの node が使われる」ことを確認している。
 
 ### Node.js は apt (universe) を使う
 

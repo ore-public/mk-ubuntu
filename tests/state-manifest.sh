@@ -58,6 +58,7 @@ for p in \
   /usr/local/bin/herdr \
   /usr/local/bin/opencode \
   /usr/local/bin/first-run-wizard \
+  /usr/local/bin/mise \
   /usr/local/bin/vicinae \
   /etc/systemd/user/vicinae.service \
   /etc/systemd/user/default.target.wants/vicinae.service \
