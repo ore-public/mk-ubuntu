@@ -18,11 +18,14 @@ keybind = alt+c=copy_to_clipboard
 keybind = alt+v=paste_from_clipboard
 
 # ---------------------------------------------------------------------------
-# 見た目 (最小限)
+# 見た目
 # ---------------------------------------------------------------------------
-# フォントは Ubuntu Desktop に標準で入るものだけを指定する。
+# Moralerspace Neon HW は 12-fonts.sh が導入する日本語プログラミングフォント。
+# Monaspace (英字) と IBM Plex Sans JP (日本語) の合成で、
+# HW は日本語を半角幅で組む版。
+# フォントを変えたいときは config.local に font-family を書けばよい。
 
-font-family = "Ubuntu Sans Mono"
+font-family = "Moralerspace Neon HW"
 font-size = 12
 
 # ---------------------------------------------------------------------------

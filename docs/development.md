@@ -15,6 +15,7 @@ install.sh              エントリポイント。sudo で実行し、全モジ
 lib/common.sh           全モジュール共通のヘルパー (ログ / 冪等な配置 / apt / dconf)
 modules/                機能単位のスクリプト。番号プレフィックスで実行順を制御する
   10-packages.sh          apt の基礎パッケージ
+  12-fonts.sh             Moralerspace Neon HW (ターミナル用フォント)
   15-brave.sh             Brave の導入と既定ブラウザ化
   17-desktop-apps.sh      Discord / Zoom / 1Password / Dropbox (公式配布版)
   20-zsh-zimfw.sh         zsh + zimfw
@@ -127,6 +128,23 @@ sudo bash modules/30-xremap.sh   # 直接実行もできる
 | APT | 3 系。`apt-key` は削除済み | 外部リポジトリは keyring 方式 (`/etc/apt/keyrings/` + `Signed-By`) のみ。deb822 形式で記述 |
 | GNOME | 50。Wayland セッションのみ | xremap の GNOME 拡張が必須。X.org 前提の手順は使わない |
 | Ghostty | universe に 1.3.0 | `apt install ghostty` で導入。ソースビルドしない |
+
+### フォントは必要な variant だけを取り出す
+
+ターミナルのフォントに Moralerspace Neon HW を使う。
+Monaspace (英字) と IBM Plex Sans JP (日本語) を合成した日本語
+プログラミングフォントで、HW は日本語を半角幅で組む版。
+
+配布 zip (`MoralerspaceHW_v2.0.0.zip`) には Argon / Krypton / Neon /
+Radon / Xenon の全 variant が入っていて 102MB あるが、
+使うのは Neon HW の 4 ファイル (約 32MB) だけなので `unzip -j` で
+それだけを取り出す。アサーションで「他の variant が混ざっていないこと」も見る。
+
+fontconfig が返す family 名は **`Moralerspace Neon HW`** (実機で確認)。
+Ghostty の `font-family` にはこの名前を書く。
+
+`fc-cache` はディレクトリを指定すると、その場の `fc-list` に
+すぐ反映されないことがあったため、引数なしで全体を作り直している。
 
 ### 外部 apt リポジトリはベンダー公式のものだけ
 

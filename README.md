@@ -22,6 +22,7 @@ sudo ./install.sh
 | **ワークスペース** | 10 個固定。Ctrl+1 〜 Ctrl+0 で移動 |
 | **ターミナル** | Ghostty が既定に。Ctrl+Alt+T で開く |
 | **シェル** | zsh + zimfw。Ctrl+R で履歴検索、Ctrl+T でファイル検索 |
+| **フォント** | Moralerspace Neon HW (日本語プログラミングフォント) |
 | **ブラウザ** | Brave が既定に (Firefox も残ります) |
 | **プレビュー** | Files でスペースキーを押すとプレビュー (Quick Look 相当) |
 | **AI エージェント** | Claude Code / GitHub Copilot CLI / opencode / herdr |
@@ -266,6 +267,7 @@ apt から入るもののほか、次を特定のバージョンで導入しま�
 | ソフトウェア | バージョン |
 | --- | --- |
 | Ghostty (ターミナル) | Ubuntu の 1.3.0 |
+| Moralerspace Neon HW (フォント) | v2.0.0 |
 | Docker Engine / Compose | 最新 (Docker 公式リポジトリ) |
 | 1Password | 最新 (1Password 公式リポジトリ) |
 | Discord / Zoom | 最新 (公式サイト。アプリが自身で更新します) |

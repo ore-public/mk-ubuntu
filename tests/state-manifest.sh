@@ -91,6 +91,10 @@ find /etc/skel/.zim/modules -maxdepth 1 -mindepth 1 -type d 2>/dev/null |
 [ -e /etc/skel/.zim/init.zsh ] && echo "skel-init-zsh PRESENT" || echo "skel-init-zsh ABSENT"
 
 echo
+echo "=== フォント ==="
+hash_tree /usr/local/share/fonts/moralerspace
+
+echo
 echo "=== GNOME 拡張 ==="
 hash_tree /usr/share/gnome-shell/extensions/xremap@k0kubun.com
 hash_tree /usr/share/gnome-shell/extensions/follow-moved-windows@mk-ubuntu
