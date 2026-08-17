@@ -179,7 +179,7 @@ application-list=['brave-browser.desktop:1', 'com.mitchellh.ghostty.desktop:6', 
 
 | キー | 動作 |
 | --- | --- |
-| CapsLock | Ctrl として働く |
+| CapsLock | Ctrl として働く (入れ替えではないので、CapsLock 機能自体は使えません) |
 | Alt+C / Alt+V / Alt+X | コピー / ペースト / カット |
 | Alt+Z / Alt+A / Alt+S | 元に戻す / 全選択 / 保存 |
 | Alt+F / Alt+T / Alt+W | 検索 / 新規タブ / タブを閉じる |
