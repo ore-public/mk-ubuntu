@@ -26,6 +26,7 @@ sudo ./install.sh
 | **ブラウザ** | Brave が既定に (Firefox も残ります) |
 | **プレビュー** | Files でスペースキーを押すとプレビュー (Quick Look 相当) |
 | **AI エージェント** | Claude Code / GitHub Copilot CLI / opencode / herdr |
+| **Git ホスティング** | gh (GitHub) / glab (GitLab) |
 | **アプリ** | Discord / Zoom / 1Password / Dropbox (公式配布版) |
 | **コンテナ** | Docker Engine と Docker Compose (Docker 公式版) |
 | **言語バージョン管理** | mise (Ruby / Node.js / PHP などをプロジェクト単位で切替) |
@@ -255,6 +256,8 @@ PHP は必ずソースからビルドします (Composer も一緒に入りま�
 | `copilot` | GitHub Copilot CLI |
 | `opencode` | opencode |
 | `herdr` | エージェント向けターミナル多重化ツール |
+| `gh` | GitHub CLI (`gh auth login` で認証) |
+| `glab` | GitLab CLI (`glab auth login` で認証) |
 
 Claude Code からは、ブラウザ操作 (Playwright) と herdr の操作ができます。
 
@@ -269,6 +272,8 @@ apt から入るもののほか、次を特定のバージョンで導入しま�
 | Ghostty (ターミナル) | Ubuntu の 1.3.0 |
 | Moralerspace Neon HW (フォント) | v2.0.0 |
 | Docker Engine / Compose | 最新 (Docker 公式リポジトリ) |
+| gh (GitHub CLI) | 最新 (GitHub 公式リポジトリ) |
+| glab (GitLab CLI) | 1.114.0 |
 | 1Password | 最新 (1Password 公式リポジトリ) |
 | Discord / Zoom | 最新 (公式サイト。アプリが自身で更新します) |
 | Dropbox | 2026.05.06 |

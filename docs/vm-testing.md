@@ -179,6 +179,11 @@ VM でも確認できるが、描画品質と打鍵感は実機の値と異な�
 - [ ] `mise use -g php@8.1` がビルドを完走し、`php -v` が通る
 - [ ] `php -m` に gd / intl / mbstring / curl / openssl / zip がある
 
+### Git ホスティングの CLI
+
+- [ ] `gh auth login` で GitHub にログインできる
+- [ ] `glab auth login` で GitLab にログインできる
+
 ### 設定ファイルの持ち方
 
 - [ ] `~/.zshrc.local` にエイリアスを書いて再ログインすると効く

@@ -50,6 +50,8 @@ for p in \
   /etc/apt/sources.list.d/brave-browser-release.sources \
   /usr/share/keyrings/1password-archive-keyring.gpg \
   /etc/apt/sources.list.d/1password.sources \
+  /etc/apt/keyrings/githubcli-archive-keyring.gpg \
+  /etc/apt/sources.list.d/github-cli.sources \
   /etc/apt/keyrings/docker.gpg \
   /etc/apt/sources.list.d/docker.sources \
   /etc/systemd/user/xremap.service \

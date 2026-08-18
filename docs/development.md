@@ -27,6 +27,7 @@ modules/                機能単位のスクリプト。番号プレフィッ�
   50-herdr.sh             herdr
   55-docker.sh            Docker Engine (Docker 公式リポジトリ)
   58-mise.sh              mise と Ruby のビルド依存
+  59-git-clis.sh          gh / glab (Git ホスティングの CLI)
   60-agents.sh            Node.js と AI エージェント各種、初回ウィザード
   65-agent-tooling.sh     Playwright MCP、共有ブラウザ、herdr 操作スキル
   70-existing-users.sh    既存ユーザーへの設定配布と input グループ追加
@@ -158,9 +159,42 @@ deb822 形式で記述する。
 | Brave | `15-brave.sh` | 個別バージョンの固定 URL が公開されていない |
 | 1Password | `17-desktop-apps.sh` | パスワード管理ソフトなので更新が届く経路を優先する |
 | Docker | `55-docker.sh` | Ubuntu の `docker.io` ではなく公式版を使うため |
+| GitHub CLI | `59-git-clis.sh` | universe の版が上流から大きく遅れているため |
 
 これらは個別バージョンを固定せず、**リポジトリ署名を信頼の根拠**とする。
 リポジトリを持たない外部バイナリは、バージョン固定 + SHA256 検証を行う。
+
+### gh / glab は universe 版を使わない
+
+どちらも Ubuntu の universe にあるが、上流から大きく遅れている
+(26.04 時点で gh 2.46 / glab 1.53 に対し、上流は gh 2.97 / glab 1.114)。
+日々使うツールで機能差が大きいので、ベンダー公式の配布物を使う。
+
+| ツール | 取得元 | バージョン |
+| --- | --- | --- |
+| gh | GitHub 公式 apt リポジトリ (`cli.github.com`) | 固定しない (apt で更新が届く) |
+| glab | GitLab Releases の deb | **固定 + SHA256** (apt リポジトリが無いため) |
+
+gh の署名鍵は既にバイナリ形式で配布されているので `gpg --dearmor` は要らない
+(Brave や Docker の鍵とはここが違う)。
+
+アサーションでは「コマンドが存在する」だけでなく、**universe の古い版を
+掴んでいないこと**も確認する (gh は 2.90 以上、glab は 1.53 系でないこと)。
+apt の解決順が変わって universe 版に落ちたら気づけるようにするため。
+
+#### 既に universe 版が入っている環境では入れ直しが要る
+
+`apt_install` は「導入済みなら何もしない」ので、universe の gh が既に
+入っている環境では、公式リポジトリを足しても**古いままになる**。
+実機で確認したところ、まさにこの状態になっていた (候補は 2.97 なのに
+導入済みは 2.46 のまま)。
+
+そのため `59-git-clis.sh` は `apt_install_or_upgrade` を使い、
+導入済みの版と候補が食い違っていたら明示的に入れ直す。
+リポジトリを足した直後は候補が変わるので、判断の前に必ず `apt update` する。
+
+この不具合は「universe の版を掴んでいないこと」を見るアサーションが
+捕まえた。存在確認だけでは気づけなかった。
 
 ### デスクトップアプリは公式配布版のみ。ただし 4 つとも amd64 限定
 

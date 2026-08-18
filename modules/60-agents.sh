@@ -99,8 +99,8 @@ main() {
   npm_install_pinned "@anthropic-ai/claude-code" "$CLAUDE_CODE_VERSION"
   npm_install_pinned "@github/copilot" "$COPILOT_CLI_VERSION"
   install_opencode
-  # gh CLI は Copilot CLI の認証 (gh auth login) に必要
-  apt_install gh
+  # gh は 59-git-clis.sh が GitHub 公式リポジトリから導入する
+  # (Copilot CLI の認証 gh auth login で使う)
   install_wizard
 
   log "導入したエージェント:"
