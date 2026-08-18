@@ -127,6 +127,8 @@ VM でも確認できるが、描画品質と打鍵感は実機の値と異な�
 - [ ] Ctrl+Alt+T で **Ghostty** が起動する (Ptyxis ではない)
 - [ ] Ghostty 内で Alt+C / Alt+V がコピー / ペーストとして働く (ネイティブ keybind)
 - [ ] Ghostty 内で Ctrl+C が「中断」として働く (グローバルリマップの除外が効いている)
+- [ ] Ghostty 内で Alt+C を押してもターミナルが終了しない
+      (終了する場合は xremap の GNOME 拡張が読み込まれていない)
 - [ ] Ghostty 内で Ctrl+A / Ctrl+E がシェルの行頭 / 行末移動として働く
 - [ ] シェルが zsh で、プロンプトに git のブランチ名が出る
 - [ ] Ctrl+R でコマンド履歴のあいまい検索ができる

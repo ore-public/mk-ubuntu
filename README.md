@@ -307,10 +307,25 @@ Playwright の Chromium は全ユーザー共有で `/opt/playwright-browsers` �
 
 ## 困ったとき
 
-**キーリマップが効かない**
+**キーリマップが効かない / アプリが決まったワークスペースで開かない**
 
-再起動 (またはログアウトとログイン) をしましたか。
-それでも効かない場合:
+まず再起動 (またはログアウトとログイン) をしてください。
+GNOME の拡張はログインし直さないと読み込まれません。
+
+それでも効かない場合は、拡張が有効か確認します。
+
+```bash
+gnome-extensions info xremap@k0kubun.com | grep State
+gnome-extensions info auto-move-windows@gnome-shell-extensions.gcampax.github.com | grep State
+```
+
+`ACTIVE` でなければ、次を実行してからログインし直してください。
+
+```bash
+sudo ./install.sh 70-existing-users.sh
+```
+
+xremap 自体の状態は次で見られます。
 
 ```bash
 systemctl --user status xremap.service

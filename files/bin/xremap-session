@@ -11,9 +11,20 @@
 # 1 つ目にマージする。存在しないファイルを渡すとエラーになるので、
 # ここで実在するものだけを並べる。
 #
+# 起動前に xremap 用の GNOME 拡張が応答することを確かめる。
+# Wayland では、この拡張がないと xremap はフォーカス中のアプリを判別できず、
+# 設定に書いた「ターミナルを除外する」が無視されて全アプリに適用される。
+# その状態だと Ghostty の中で Alt+C が Ctrl+C になり、実行中のコマンドが
+# 中断される (実機でターミナルが終了する不具合として現れた)。
+# 判別できないまま動かすより動かさない方が安全なので、待ってから起動する。
+#
 set -eu
 
 XREMAP=/usr/local/bin/xremap
+
+# 拡張が現れるまで待つ秒数。ログイン直後は GNOME Shell の初期化が終わっておらず、
+# 拡張の D-Bus 名がまだ出ていないことがある。
+WAIT_SECONDS=60
 
 home="${1:-${HOME:-}}"
 if [ -z "$home" ]; then
@@ -27,6 +38,31 @@ local_config="${home}/.config/xremap/config.local.yml"
 if [ ! -r "$config" ]; then
   echo "xremap-session: 設定ファイルがありません: ${config}" >&2
   exit 1
+fi
+
+# GNOME 拡張が応答するか (ActiveWindow はフォーカスが無くても JSON を返す)
+extension_ready() {
+  gdbus call --session \
+    --dest org.gnome.Shell \
+    --object-path /com/k0kubun/Xremap \
+    --method com.k0kubun.Xremap.ActiveWindow >/dev/null 2>&1
+}
+
+if command -v gdbus >/dev/null 2>&1; then
+  waited=0
+  while ! extension_ready; do
+    if [ "$waited" -ge "$WAIT_SECONDS" ]; then
+      echo "xremap-session: xremap 用の GNOME 拡張が応答しません。" >&2
+      echo "  拡張が読み込まれていない状態で動かすとターミナルの操作を壊すため、" >&2
+      echo "  起動しません。いったんログアウトして入り直してください。" >&2
+      echo "  状態の確認: gnome-extensions info xremap@k0kubun.com" >&2
+      exit 1
+    fi
+    sleep 2
+    waited=$((waited + 2))
+  done
+else
+  echo "xremap-session: gdbus が無いため拡張の確認を省略します。" >&2
 fi
 
 if [ -r "$local_config" ]; then

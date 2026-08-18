@@ -77,6 +77,36 @@ if command -v gnome-extensions >/dev/null 2>&1; then
     gnome-extensions info "follow-moved-windows@mk-ubuntu"
 fi
 
+# 既存ユーザーの実効値に、こちらで有効化した拡張がすべて入っていること。
+# dconf のシステム既定値は「個人の設定が無いとき」しか効かないので、
+# 個人の値がある環境では 70-existing-users.sh が足す必要がある
+# (実機で拡張が動かず、ワークスペース割当とターミナル除外が壊れた)。
+if [ -f /etc/dconf/db/local.d/30-extensions ]; then
+  effective="$(gsettings get org.gnome.shell enabled-extensions 2>/dev/null || echo '')"
+  missing=0
+  while IFS= read -r uuid; do
+    [ -n "$uuid" ] || continue
+    case "$effective" in
+      *"$uuid"*) ;;
+      *) missing=1; diag "実効値に入っていない拡張: ${uuid}" ;;
+    esac
+  done < <(grep -m1 '^enabled-extensions=' /etc/dconf/db/local.d/30-extensions |
+    grep -oE "'[^']+'" | tr -d "'")
+
+  if [ "$missing" -eq 0 ]; then
+    pass "システム既定の拡張がすべて実効値に入っている"
+  else
+    fail "システム既定の拡張がすべて実効値に入っている"
+    diag "個人設定がシステム既定を上書きしています。"
+  fi
+fi
+
+# Auto Move Windows が読み込まれていること (これが無いと割当が働かない)
+if command -v gnome-extensions >/dev/null 2>&1; then
+  check_cmd_output "Auto Move Windows が ACTIVE" "State: ACTIVE" \
+    gnome-extensions info "auto-move-windows@gnome-shell-extensions.gcampax.github.com"
+fi
+
 # Ubuntu が既定で有効にしている拡張を消していないこと
 # (enabled-extensions をシステム既定値で上書きする副作用の確認)
 if command -v gnome-extensions >/dev/null 2>&1; then

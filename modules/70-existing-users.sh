@@ -22,6 +22,12 @@
 # グループ (input / docker など) を既存ユーザーにも付与する。
 # 新規ユーザーは adduser が付けてくれるが、既存ユーザーには誰も付けないため。
 #
+# GNOME 拡張の有効化も同じ事情がある。dconf のシステム既定値は
+# 「ユーザー個人の設定が無いとき」しか効かず、enabled-extensions は
+# 1 つのキーに配列を持つ形式なので、個人の値があるとシステム既定は
+# 丸ごと無視される。Ubuntu を普通に使っていると個人の値が入っていることが
+# あるため、既存ユーザーには個人の設定にも足しておく。
+#
 # ログインシェルの変更だけは行わず、chsh の案内にとどめる。
 #
 set -euo pipefail
@@ -130,6 +136,68 @@ seed_skel_into_home() {
   fi
 }
 
+# システム既定として有効化した GNOME 拡張の UUID を 1 行ずつ出力する。
+# 定義元は lib/common.sh が作る 30-extensions なので、そこから読む。
+list_system_extensions() {
+  local file="${DCONF_DB_DIR}/30-extensions"
+  [ -f "$file" ] || return 0
+  grep -m1 '^enabled-extensions=' "$file" 2>/dev/null |
+    grep -oE "'[^']+'" | tr -d "'" || true
+}
+
+# 対象ユーザーとして dconf を実行する。
+# ログイン中ならそのセッションのバスを使い、居なければ一時的なバスを作る
+# (どちらの場合も書き込み先は ~/.config/dconf/user なので結果は同じ)。
+run_user_dconf() {
+  local user="$1" uid
+  shift
+  uid="$(id -u "$user")"
+
+  if [ -S "/run/user/${uid}/bus" ]; then
+    runuser -u "$user" -- env \
+      "XDG_RUNTIME_DIR=/run/user/${uid}" \
+      "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/${uid}/bus" \
+      "$@"
+  else
+    runuser -u "$user" -- env "XDG_RUNTIME_DIR=/run/user/${uid}" \
+      dbus-run-session -- "$@"
+  fi
+}
+
+# 既存ユーザーの個人設定にも拡張を足す。既にあるものは触らない。
+enable_extensions_for_user() {
+  local user="$1" current new uuids=() u
+  local merge_script="${REPO_ROOT}/lib/merge-extensions.py"
+
+  while IFS= read -r u; do
+    [ -n "$u" ] && uuids+=("$u")
+  done < <(list_system_extensions)
+
+  [ "${#uuids[@]}" -gt 0 ] || return 0
+
+  # 個人の値が無ければシステム既定がそのまま効くので触らない
+  current="$(run_user_dconf "$user" dconf read /org/gnome/shell/enabled-extensions 2>/dev/null || true)"
+  if [ -z "$current" ]; then
+    log "変更なし: ${user} の拡張 (システム既定が効きます)"
+    return 0
+  fi
+
+  new="$(python3 "$merge_script" "$current" "${uuids[@]}")"
+
+  if [ "$new" = "$current" ]; then
+    log "変更なし: ${user} の拡張 (個人設定に登録済み)"
+    return 0
+  fi
+
+  if run_user_dconf "$user" dconf write /org/gnome/shell/enabled-extensions "$new" 2>/dev/null; then
+    log "追加: ${user} の個人設定に GNOME 拡張を登録しました"
+    log "  反映にはログインし直しが必要です"
+  else
+    warn "${user} の個人設定に拡張を登録できませんでした。"
+    warn "  本人が次を実行してください: gnome-extensions enable <UUID>"
+  fi
+}
+
 # /etc/adduser.conf の EXTRA_GROUPS に並んでいるグループを既存ユーザーに付与する。
 # 何をどのグループに入れるかは各モジュールが登録するので、ここは中身を知らない。
 add_registered_groups() {
@@ -165,6 +233,7 @@ main() {
     log "対象ユーザー: ${user} (${home})"
     seed_skel_into_home "$user" "$home"
     add_registered_groups "$user"
+    enable_extensions_for_user "$user"
 
     case "$shell" in
       /bin/zsh | /usr/bin/zsh) ;;
