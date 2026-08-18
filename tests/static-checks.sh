@@ -93,6 +93,19 @@ else
   fail "install_file / write_file の配置先がすべて絶対パス"
 fi
 
+printf '\n=== ロケールの固定 ===\n'
+# コマンドの出力を解析する箇所があるため、実行環境の言語で動作が変わらないよう
+# 入口で LC_ALL を固定する。日本語環境で apt-cache policy の "Candidate:" が
+# "候補:" になり実機で失敗した経緯があるので、外れないように見張る。
+for f in lib/common.sh harness/asserts/lib.sh tests/state-manifest.sh bin/first-run-wizard; do
+  if grep -q '^export LC_ALL=' "${REPO_ROOT}/${f}"; then
+    pass "${f} が LC_ALL を固定している"
+  else
+    fail "${f} が LC_ALL を固定している"
+    diag "コマンド出力の解析が実行環境の言語に左右されます。"
+  fi
+done
+
 printf '\n=== 認証情報が含まれていないこと ===\n'
 if grep -rIlE 'sk-ant-[A-Za-z0-9]|ghp_[A-Za-z0-9]{20}|github_pat_[A-Za-z0-9]{20}' \
   "$REPO_ROOT" --exclude-dir=.git >/dev/null 2>&1; then

@@ -82,7 +82,7 @@ main() {
   log "フォントキャッシュを更新します"
   fc-cache -f >/dev/null 2>&1 || warn "fc-cache に失敗しました。"
 
-  if fc-list 2>/dev/null | grep -q "Moralerspace Neon HW"; then
+  if output_contains "Moralerspace Neon HW" fc-list; then
     log "フォントが利用可能です: Moralerspace Neon HW"
   else
     warn "fc-list で Moralerspace Neon HW を確認できませんでした。"

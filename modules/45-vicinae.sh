@@ -146,7 +146,7 @@ main() {
   require_root
 
   # AppImage の中身は libOpenGL.so.0 を要求する (10-packages.sh で導入)
-  if ! ldconfig -p 2>/dev/null | grep -q "libOpenGL.so.0"; then
+  if ! output_contains "libOpenGL.so.0" ldconfig -p; then
     warn "libOpenGL.so.0 が見つかりません。先に 10-packages.sh を実行してください。"
   fi
 

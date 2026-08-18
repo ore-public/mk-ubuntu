@@ -43,7 +43,7 @@ main() {
 
   # ghostty / bat / fzf / nodejs はいずれも universe にある。
   # Ubuntu Desktop の既定では有効なので、無効なときだけ有効化する。
-  if apt-cache policy 2>/dev/null | grep -q "/universe"; then
+  if output_contains "/universe" apt-cache policy; then
     log "universe コンポーネントは有効です"
   elif command -v add-apt-repository >/dev/null 2>&1; then
     log "universe コンポーネントを有効化します"

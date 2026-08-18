@@ -12,6 +12,9 @@
 #
 set -euo pipefail
 
+# 各ツールの出力を解析するので、ロケールを固定して英語表記に揃える
+export LC_ALL=C.UTF-8
+
 DISTRO_NAME="mk-ubuntu"
 STATE_DIR="${XDG_CONFIG_HOME:-${HOME}/.config}/${DISTRO_NAME}"
 DONE_FLAG="${STATE_DIR}/wizard-done"
